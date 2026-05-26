@@ -10,6 +10,10 @@ func parseUUID(value string) (uuid.UUID, error) {
 	return uuid.Parse(value)
 }
 
+func ParseUUID(value string) (uuid.UUID, error) {
+	return parseUUID(value)
+}
+
 func parseOptionalUUID(value *string) (*uuid.UUID, error) {
 	if value == nil || *value == "" {
 		return nil, nil
