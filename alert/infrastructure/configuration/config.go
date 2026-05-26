@@ -33,8 +33,8 @@ func Load() (Config, error) {
 		ServerPort:            getEnvOrDefault("SERVER_PORT", "8085"),
 		DatabaseURL:           os.Getenv("DATABASE_URL"),
 		KafkaBrokers:          splitEnv("KAFKA_BROKERS", "localhost:9092"),
-		KafkaConsumerGroup:    getEnvOrDefault("KAFKA_CONSUMER_GROUP", "alert-service-group"),
-		KafkaConsumptionTopic: getEnvOrDefault("KAFKA_CONSUMPTION_TOPIC", "energy.consumption.recorded"),
+		KafkaConsumerGroup:    getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, "alert-service-group"),
+		KafkaConsumptionTopic: getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, "energy.consumption.recorded"),
 		TwilioAccountSID:      os.Getenv("TWILIO_ACCOUNT_SID"),
 		TwilioAPIKey:          os.Getenv("TWILIO_API_KEY"),
 		TwilioAPISecret:       os.Getenv("TWILIO_API_SECRET"),
@@ -66,6 +66,17 @@ func getEnvOrDefault(key string, defaultValue string) string {
 	}
 
 	return value
+}
+
+func getFirstEnv(keys []string, defaultValue string) string {
+	for _, key := range keys {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value != "" {
+			return value
+		}
+	}
+
+	return defaultValue
 }
 
 func splitEnv(key string, defaultValue string) []string {
