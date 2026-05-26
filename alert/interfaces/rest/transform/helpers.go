@@ -1,38 +1,38 @@
 package transform
 
 import (
-    "time"
+	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
 func parseUUID(value string) (uuid.UUID, error) {
-    return uuid.Parse(value)
+	return uuid.Parse(value)
 }
 
 func parseOptionalUUID(value *string) (*uuid.UUID, error) {
-    if value == nil || *value == "" {
-        return nil, nil
-    }
+	if value == nil || *value == "" {
+		return nil, nil
+	}
 
-    parsed, err := uuid.Parse(*value)
-    if err != nil {
-        return nil, err
-    }
+	parsed, err := uuid.Parse(*value)
+	if err != nil {
+		return nil, err
+	}
 
-    return &parsed, nil
+	return &parsed, nil
 }
 
 func parseTimeOfDay(value string) (*time.Time, error) {
-    if value == "" {
-        return nil, nil
-    }
+	if value == "" {
+		return nil, nil
+	}
 
-    parsed, err := time.Parse("15:04", value)
-    if err != nil {
-        return nil, err
-    }
+	parsed, err := time.Parse("15:04", value)
+	if err != nil {
+		return nil, err
+	}
 
-    result := time.Date(2000, 1, 1, parsed.Hour(), parsed.Minute(), 0, 0, time.UTC)
-    return &result, nil
+	result := time.Date(2000, 1, 1, parsed.Hour(), parsed.Minute(), 0, 0, time.UTC)
+	return &result, nil
 }
