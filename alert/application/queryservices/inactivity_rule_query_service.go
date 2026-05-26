@@ -1,22 +1,22 @@
 package queryservices
 
 import (
-    "context"
+	"context"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 
-    "microservice-alert-service/alert/application/outboundservices"
-    "microservice-alert-service/alert/domain/model/entities"
+	"microservice-alert-service/alert/application/outboundservices"
+	"microservice-alert-service/alert/domain/model/entities"
 )
 
 type InactivityRuleQueryService struct {
-    repo outboundservices.InactivityRuleRepository
+	repo outboundservices.InactivityRuleRepository
 }
 
 func NewInactivityRuleQueryService(repo outboundservices.InactivityRuleRepository) *InactivityRuleQueryService {
-    return &InactivityRuleQueryService{repo: repo}
+	return &InactivityRuleQueryService{repo: repo}
 }
 
 func (s *InactivityRuleQueryService) ListByUser(ctx context.Context, userID uuid.UUID) ([]entities.InactivityRule, error) {
-    return s.repo.ListByUser(ctx, userID)
+	return s.repo.ListByUser(ctx, userID)
 }

@@ -1,22 +1,22 @@
 package queryservices
 
 import (
-    "context"
+	"context"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 
-    "microservice-alert-service/alert/application/outboundservices"
-    "microservice-alert-service/alert/domain/model/entities"
+	"microservice-alert-service/alert/application/outboundservices"
+	"microservice-alert-service/alert/domain/model/entities"
 )
 
 type ThresholdQueryService struct {
-    repo outboundservices.AlertThresholdRepository
+	repo outboundservices.AlertThresholdRepository
 }
 
 func NewThresholdQueryService(repo outboundservices.AlertThresholdRepository) *ThresholdQueryService {
-    return &ThresholdQueryService{repo: repo}
+	return &ThresholdQueryService{repo: repo}
 }
 
 func (s *ThresholdQueryService) ListByUser(ctx context.Context, userID uuid.UUID) ([]entities.AlertThreshold, error) {
-    return s.repo.ListByUser(ctx, userID)
+	return s.repo.ListByUser(ctx, userID)
 }
