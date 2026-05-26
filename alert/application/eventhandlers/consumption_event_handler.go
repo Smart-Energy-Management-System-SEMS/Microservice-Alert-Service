@@ -29,7 +29,6 @@ type ConsumptionEventHandler struct {
 	inactivityRepo  outboundservices.InactivityRuleRepository
 	activityRepo    outboundservices.DeviceActivityRepository
 	alertService    *commandservices.AlertCommandService
-	notificationSvc *commandservices.NotificationService
 	logger          *log.Logger
 }
 
@@ -38,7 +37,6 @@ func NewConsumptionEventHandler(
 	inactivityRepo outboundservices.InactivityRuleRepository,
 	activityRepo outboundservices.DeviceActivityRepository,
 	alertService *commandservices.AlertCommandService,
-	notificationSvc *commandservices.NotificationService,
 	logger *log.Logger,
 ) *ConsumptionEventHandler {
 	return &ConsumptionEventHandler{
@@ -46,7 +44,6 @@ func NewConsumptionEventHandler(
 		inactivityRepo:  inactivityRepo,
 		activityRepo:    activityRepo,
 		alertService:    alertService,
-		notificationSvc: notificationSvc,
 		logger:          logger,
 	}
 }

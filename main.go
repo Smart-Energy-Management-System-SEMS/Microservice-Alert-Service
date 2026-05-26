@@ -87,7 +87,6 @@ func main() {
 		inactivityRepo,
 		deviceActivityRepo,
 		alertCommandService,
-		notificationService,
 		logger,
 	)
 
