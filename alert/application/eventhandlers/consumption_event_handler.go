@@ -25,11 +25,11 @@ type ConsumptionRecordedEvent struct {
 }
 
 type ConsumptionEventHandler struct {
-	thresholdRepo   outboundservices.AlertThresholdRepository
-	inactivityRepo  outboundservices.InactivityRuleRepository
-	activityRepo    outboundservices.DeviceActivityRepository
-	alertService    *commandservices.AlertCommandService
-	logger          *log.Logger
+	thresholdRepo  outboundservices.AlertThresholdRepository
+	inactivityRepo outboundservices.InactivityRuleRepository
+	activityRepo   outboundservices.DeviceActivityRepository
+	alertService   *commandservices.AlertCommandService
+	logger         *log.Logger
 }
 
 func NewConsumptionEventHandler(
@@ -40,11 +40,11 @@ func NewConsumptionEventHandler(
 	logger *log.Logger,
 ) *ConsumptionEventHandler {
 	return &ConsumptionEventHandler{
-		thresholdRepo:   thresholdRepo,
-		inactivityRepo:  inactivityRepo,
-		activityRepo:    activityRepo,
-		alertService:    alertService,
-		logger:          logger,
+		thresholdRepo:  thresholdRepo,
+		inactivityRepo: inactivityRepo,
+		activityRepo:   activityRepo,
+		alertService:   alertService,
+		logger:         logger,
 	}
 }
 
