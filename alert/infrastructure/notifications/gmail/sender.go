@@ -21,6 +21,7 @@ func NewSender(cfg configuration.Config, logger *log.Logger) *Sender {
 }
 
 func (s *Sender) Send(ctx context.Context, to string, subject string, body string) error {
+	_ = ctx
 	if s.cfg.MailHost == "" || s.cfg.MailUsername == "" || s.cfg.MailPassword == "" {
 		return errors.New("mail configuration missing")
 	}

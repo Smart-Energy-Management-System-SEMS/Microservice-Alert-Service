@@ -18,6 +18,7 @@ func NewDeviceActivityRepository() *DeviceActivityRepository {
 }
 
 func (r *DeviceActivityRepository) GetLastActivity(ctx context.Context, deviceID uuid.UUID) (time.Time, bool, error) {
+	_ = ctx
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -26,6 +27,7 @@ func (r *DeviceActivityRepository) GetLastActivity(ctx context.Context, deviceID
 }
 
 func (r *DeviceActivityRepository) SaveLastActivity(ctx context.Context, deviceID uuid.UUID, at time.Time) error {
+	_ = ctx
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
