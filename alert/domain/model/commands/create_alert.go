@@ -1,20 +1,20 @@
 package commands
 
 import (
-    "time"
+	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
 type CreateAlertCommand struct {
-    UserID           uuid.UUID
-    DeviceID         uuid.UUID
-    ThresholdID      *uuid.UUID
-    InactivityRuleID *uuid.UUID
-    AlertType        string
-    Title            string
-    Message          string
-    Severity         string
-    Status           string
-    TriggeredAt      time.Time
+	UserID           uuid.UUID
+	DeviceID         uuid.UUID
+	ThresholdID      *uuid.UUID
+	InactivityRuleID *uuid.UUID
+	AlertType        string
+	Title            string
+	Message          string
+	Severity         string
+	Status           string
+	TriggeredAt      time.Time
 }

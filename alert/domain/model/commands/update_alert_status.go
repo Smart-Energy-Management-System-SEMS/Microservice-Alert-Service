@@ -1,13 +1,13 @@
 package commands
 
 import (
-    "time"
+	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
 type UpdateAlertStatusCommand struct {
-    AlertID    uuid.UUID
-    Status     string
-    ResolvedAt *time.Time
+	AlertID    uuid.UUID
+	Status     string
+	ResolvedAt *time.Time
 }
