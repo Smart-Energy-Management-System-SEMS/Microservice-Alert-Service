@@ -59,3 +59,34 @@ Ejemplo de evento:
 - Las migraciones se ejecutan automaticamente al iniciar el servicio.
 - Para notificaciones reales se recomienda integrar un proveedor de contactos de usuario.
 - Por defecto, el servicio usa MAIL_FROM o MAIL_USERNAME y TWILIO_PHONE_NUMBER como destinatarios de demo.
+
+## Keep-Alive para Render
+
+Si quieres evitar que el servicio entre en reposo por inactividad, puedes ejecutar un ping periodico contra tu URL publicada.
+
+Scripts incluidos:
+
+- `scripts/keep-alive.sh`
+- `scripts/keep-alive.ps1`
+
+Variables:
+
+- `TARGET_URL`: URL base del servicio en Render (ej. `https://tu-servicio.onrender.com`)
+- `PING_PATH`: ruta a consultar (default: `/api/v1/alerts`)
+- `INTERVAL_SECONDS`: intervalo entre pings en segundos (default: `600`)
+
+Ejemplo Bash:
+
+```bash
+TARGET_URL="https://tu-servicio.onrender.com" INTERVAL_SECONDS=600 bash scripts/keep-alive.sh
+```
+
+Ejemplo PowerShell:
+
+```powershell
+$env:TARGET_URL="https://tu-servicio.onrender.com"
+$env:INTERVAL_SECONDS="600"
+.\scripts\keep-alive.ps1
+```
+
+Importante: en Render, los servicios `Free` pueden suspenderse igual por politicas de la plataforma. Para evitar suspension garantizada, se recomienda plan `paid` o un worker/cron externo que haga los pings.
