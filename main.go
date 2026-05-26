@@ -1,20 +1,133 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"microservice-alert-service/alert/application/commandservices"
+	"microservice-alert-service/alert/application/eventhandlers"
+	"microservice-alert-service/alert/application/queryservices"
+	"microservice-alert-service/alert/infrastructure/configuration"
+	"microservice-alert-service/alert/infrastructure/messaging/kafka"
+	"microservice-alert-service/alert/infrastructure/notifications/gmail"
+	"microservice-alert-service/alert/infrastructure/notifications/twilio"
+	gormconfig "microservice-alert-service/alert/infrastructure/persistence/gorm/configuration"
+	"microservice-alert-service/alert/infrastructure/persistence/gorm/model"
+	"microservice-alert-service/alert/infrastructure/persistence/gorm/repositories"
+	"microservice-alert-service/alert/infrastructure/persistence/memory"
+	"microservice-alert-service/alert/interfaces/rest"
 )
 
-//TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
-// the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
 func main() {
-	//TIP <p>Press <shortcut actionId="ShowIntentionActions"/> when your caret is at the underlined text
-	// to see how GoLand suggests fixing the warning.</p><p>Alternatively, if available, click the lightbulb to view possible fixes.</p>
-	s := "gopher"
-	fmt.Println("Hello and welcome, %s!", s)
+	logger := log.New(os.Stdout, "alert-service ", log.LstdFlags|log.LUTC)
 
-	for i := 1; i <= 5; i++ {
-		//TIP <p>To start your debugging session, right-click your code in the editor and select the Debug option.</p> <p>We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-		// for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.</p>
-		fmt.Println("i =", 100/i)
+	cfg, err := configuration.Load()
+	if err != nil {
+		logger.Fatalf("config error: %v", err)
+	}
+
+	db, err := gormconfig.NewDatabase(cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatalf("database error: %v", err)
+	}
+
+	if err := db.AutoMigrate(
+		&model.AlertThresholdModel{},
+		&model.InactivityRuleModel{},
+		&model.AlertModel{},
+		&model.NotificationPreferenceModel{},
+		&model.NotificationLogModel{},
+	); err != nil {
+		logger.Fatalf("migration error: %v", err)
+	}
+
+	alertRepo := repositories.NewAlertRepository(db)
+	thresholdRepo := repositories.NewAlertThresholdRepository(db)
+	inactivityRepo := repositories.NewInactivityRuleRepository(db)
+	preferenceRepo := repositories.NewNotificationPreferenceRepository(db)
+	logRepo := repositories.NewNotificationLogRepository(db)
+	deviceActivityRepo := memory.NewDeviceActivityRepository()
+
+	emailSender := gmail.NewSender(cfg, logger)
+	smsSender := twilio.NewSender(cfg, logger)
+
+	defaultEmailTo := cfg.MailFrom
+	if defaultEmailTo == "" {
+		defaultEmailTo = cfg.MailUsername
+	}
+	defaultSmsTo := cfg.TwilioPhoneNumber
+
+	notificationService := commandservices.NewNotificationService(
+		preferenceRepo,
+		logRepo,
+		emailSender,
+		smsSender,
+		defaultEmailTo,
+		defaultSmsTo,
+		logger,
+	)
+
+	alertCommandService := commandservices.NewAlertCommandService(alertRepo, notificationService, logger)
+	thresholdCommandService := commandservices.NewThresholdCommandService(thresholdRepo, logger)
+	inactivityCommandService := commandservices.NewInactivityRuleCommandService(inactivityRepo, logger)
+	preferenceCommandService := commandservices.NewNotificationPreferenceCommandService(preferenceRepo, logger)
+
+	alertQueryService := queryservices.NewAlertQueryService(alertRepo)
+	thresholdQueryService := queryservices.NewThresholdQueryService(thresholdRepo)
+	inactivityQueryService := queryservices.NewInactivityRuleQueryService(inactivityRepo)
+	preferenceQueryService := queryservices.NewNotificationPreferenceQueryService(preferenceRepo)
+
+	eventHandler := eventhandlers.NewConsumptionEventHandler(
+		thresholdRepo,
+		inactivityRepo,
+		deviceActivityRepo,
+		alertCommandService,
+		logger,
+	)
+
+	router := rest.NewRouter(
+		alertCommandService,
+		alertQueryService,
+		thresholdCommandService,
+		thresholdQueryService,
+		inactivityCommandService,
+		inactivityQueryService,
+		preferenceCommandService,
+		preferenceQueryService,
+	)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	consumer := kafka.NewConsumptionConsumer(cfg, eventHandler, logger)
+	if consumer.Enabled() {
+		go consumer.Start(ctx)
+	} else {
+		logger.Println("kafka consumer disabled: missing brokers or topic")
+	}
+
+	server := &http.Server{
+		Addr:              ":" + cfg.ServerPort,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			logger.Printf("server shutdown error: %v", err)
+		}
+	}()
+
+	logger.Printf("alert service listening on :%s", cfg.ServerPort)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Fatalf("server error: %v", err)
 	}
 }
