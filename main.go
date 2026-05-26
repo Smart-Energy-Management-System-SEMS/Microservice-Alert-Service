@@ -55,7 +55,22 @@ func main() {
 
 	emailSender := gmail.NewSender(cfg, logger)
 	smsSender := twilio.NewSender(cfg, logger)
-	notificationService := commandservices.NewNotificationService(preferenceRepo, logRepo, emailSender, smsSender, logger)
+
+	defaultEmailTo := cfg.MailFrom
+	if defaultEmailTo == "" {
+		defaultEmailTo = cfg.MailUsername
+	}
+	defaultSmsTo := cfg.TwilioPhoneNumber
+
+	notificationService := commandservices.NewNotificationService(
+		preferenceRepo,
+		logRepo,
+		emailSender,
+		smsSender,
+		defaultEmailTo,
+		defaultSmsTo,
+		logger,
+	)
 
 	alertCommandService := commandservices.NewAlertCommandService(alertRepo, notificationService, logger)
 	thresholdCommandService := commandservices.NewThresholdCommandService(thresholdRepo, logger)
