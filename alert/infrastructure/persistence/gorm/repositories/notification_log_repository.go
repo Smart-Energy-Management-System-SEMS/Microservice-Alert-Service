@@ -1,22 +1,22 @@
 package repositories
 
 import (
-    "context"
+	"context"
 
-    "gorm.io/gorm"
+	"gorm.io/gorm"
 
-    "microservice-alert-service/alert/domain/model/entities"
+	"microservice-alert-service/alert/domain/model/entities"
 )
 
 type NotificationLogRepository struct {
-    db *gorm.DB
+	db *gorm.DB
 }
 
 func NewNotificationLogRepository(db *gorm.DB) *NotificationLogRepository {
-    return &NotificationLogRepository{db: db}
+	return &NotificationLogRepository{db: db}
 }
 
 func (r *NotificationLogRepository) Create(ctx context.Context, logEntry *entities.NotificationLog) error {
-    record := toNotificationLogModel(logEntry)
-    return r.db.WithContext(ctx).Create(&record).Error
+	record := toNotificationLogModel(logEntry)
+	return r.db.WithContext(ctx).Create(&record).Error
 }
