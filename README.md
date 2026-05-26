@@ -58,3 +58,4 @@ Ejemplo de evento:
 - El dominio no depende de Gin, GORM, Kafka, Twilio ni SMTP.
 - Las migraciones se ejecutan automaticamente al iniciar el servicio.
 - Para notificaciones reales se recomienda integrar un proveedor de contactos de usuario.
+- Por defecto, el servicio usa MAIL_FROM o MAIL_USERNAME y TWILIO_PHONE_NUMBER como destinatarios de demo.
