@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"microservice-alert-service/alert/interfaces/rest/resources"
 	"microservice-alert-service/alert/domain/shared"
+	"microservice-alert-service/alert/interfaces/rest/resources"
 )
 
 func respondError(ctx *gin.Context, err error) {

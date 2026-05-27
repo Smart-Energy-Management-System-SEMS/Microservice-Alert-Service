@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 
 	"microservice-alert-service/alert/domain/model/entities"
-	"microservice-alert-service/alert/infrastructure/persistence/gorm/model"
 	"microservice-alert-service/alert/domain/shared"
+	"microservice-alert-service/alert/infrastructure/persistence/gorm/model"
 )
 
 type AlertRepository struct {
