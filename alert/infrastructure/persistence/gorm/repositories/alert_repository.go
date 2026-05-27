@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 
 	"microservice-alert-service/alert/domain/model/entities"
+	"microservice-alert-service/alert/domain/shared"
 	"microservice-alert-service/alert/infrastructure/persistence/gorm/model"
-	"microservice-alert-service/alert/shared/domain"
 )
 
 type AlertRepository struct {
@@ -36,7 +36,7 @@ func (r *AlertRepository) GetByID(ctx context.Context, alertID uuid.UUID) (*enti
 	err := r.db.WithContext(ctx).First(&record, "alert_id = ?", alertID).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, domain.ErrNotFound
+			return nil, shared.ErrNotFound
 		}
 		return nil, err
 	}
