@@ -23,6 +23,27 @@ go run main.go
 
 El servicio expone la API REST en el puerto configurado (SERVER_PORT).
 
+## Ejecutar con Docker
+
+El proyecto incluye `Dockerfile` y `docker-compose.yml` para levantar el microservicio con PostgreSQL y Kafka locales.
+
+```bash
+docker compose up --build
+```
+
+La API quedara disponible en:
+
+```bash
+http://localhost:8085
+```
+
+Notas:
+
+- El compose usa PostgreSQL local con `postgres://postgres:postgres@postgres:5432/alert_service?sslmode=disable`.
+- Dentro de Docker, Kafka se consume con `KAFKA_BROKERS=kafka:9092`.
+- El archivo `.env` se carga para el puerto y credenciales externas como Gmail/Twilio, pero no se copia dentro de la imagen.
+- Para cambiar el puerto local, define `SERVER_PORT` en `.env`.
+
 ## Endpoints
 
 - GET /api/v1/alerts
