@@ -1,4 +1,44 @@
 services:
+  alert-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sems-alert-service
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-8085}
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/alert_service?sslmode=disable}
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-alerts-service-group}
+      KAFKA_CONSUMPTION_TOPIC: ${KAFKA_CONSUMPTION_TOPIC:-energy.consumption.recorded}
+    ports:
+      - "${SERVER_PORT:-8085}:${SERVER_PORT:-8085}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sems-alert-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alert_service}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   kafka:
     image: apache/kafka:latest
     container_name: sems-kafka
@@ -15,3 +55,7 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
