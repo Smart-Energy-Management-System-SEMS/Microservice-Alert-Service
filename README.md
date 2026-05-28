@@ -12,7 +12,7 @@ Este servicio ahora prioriza configuracion desde un Config Service usando:
 
 Variable principal:
 
-- `CONFIG_SERVICE_URL`
+- `CONFIG_SERVICE_URL` (local: `http://localhost:8090`)
 
 Si el Config Service no devuelve valores, el servicio usa fallback local seguro para no romper compatibilidad.
 
@@ -35,7 +35,7 @@ Mantener en `.env` solo variables sensibles o propias del despliegue:
 
 Opcional para desarrollo local sin Config Service:
 
-- `KAFKA_BROKERS` (ej. `localhost:29092`)
+- `KAFKA_BROKERS` (ej. `localhost:9092`)
 - `KAFKA_CONSUMER_GROUP`
 - `KAFKA_CONSUMPTION_TOPIC`
 - `MAIL_HOST`
@@ -78,7 +78,7 @@ docker compose up --build
 API local:
 
 ```text
-http://localhost:8085
+http://localhost:8086
 ```
 
 ## Azure Container Apps (recomendado)

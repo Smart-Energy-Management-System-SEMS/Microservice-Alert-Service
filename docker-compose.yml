@@ -8,12 +8,12 @@ services:
       - .env
     environment:
       SERVICE_NAME: ${SERVICE_NAME:-alert-service}
-      SERVER_PORT: ${SERVER_PORT:-8085}
+      SERVER_PORT: ${SERVER_PORT:-8086}
       CONFIG_SERVICE_URL: ${CONFIG_SERVICE_URL:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-alert_service}?sslmode=disable
       KAFKA_BROKERS: kafka:9092
     ports:
-      - "${SERVER_PORT:-8085}:${SERVER_PORT:-8085}"
+      - "${SERVER_PORT:-8086}:${SERVER_PORT:-8086}"
     depends_on:
       postgres:
         condition: service_healthy
