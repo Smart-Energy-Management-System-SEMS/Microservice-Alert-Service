@@ -20,6 +20,7 @@ func NewRouter(
 	inactivityQuery *queryservices.InactivityRuleQueryService,
 	preferenceCommand *commandservices.NotificationPreferenceCommandService,
 	preferenceQuery *queryservices.NotificationPreferenceQueryService,
+	kafkaController *controllers.KafkaController,
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -71,6 +72,7 @@ func NewRouter(
 
 		api.POST("/notification-preferences", preferenceController.CreatePreference)
 		api.GET("/users/:userId/notification-preferences", preferenceController.GetPreferencesByUser)
+		api.POST("/kafka/publish-test", kafkaController.PublishTestEvent)
 	}
 
 	return router

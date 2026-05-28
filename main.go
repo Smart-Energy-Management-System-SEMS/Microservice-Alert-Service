@@ -21,6 +21,7 @@ import (
 	"microservice-alert-service/alert/infrastructure/persistence/gorm/repositories"
 	"microservice-alert-service/alert/infrastructure/persistence/memory"
 	"microservice-alert-service/alert/interfaces/rest"
+	"microservice-alert-service/alert/interfaces/rest/controllers"
 )
 
 func main() {
@@ -93,6 +94,8 @@ func main() {
 		alertCommandService,
 		logger,
 	)
+	kafkaProducer := kafka.NewAlertEventProducer(cfg, logger)
+	kafkaController := controllers.NewKafkaController(kafkaProducer)
 
 	router := rest.NewRouter(
 		alertCommandService,
@@ -103,6 +106,7 @@ func main() {
 		inactivityQueryService,
 		preferenceCommandService,
 		preferenceQueryService,
+		kafkaController,
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

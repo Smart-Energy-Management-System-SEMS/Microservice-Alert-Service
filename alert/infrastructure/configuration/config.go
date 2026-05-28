@@ -14,45 +14,47 @@ import (
 )
 
 type Config struct {
-	ServiceName           string
-	ConfigServiceURL      string
-	AutoMigrate           bool
-	ServerPort            string
-	DatabaseURL           string
-	KafkaBrokers          []string
-	KafkaConsumerGroup    string
-	KafkaConsumptionTopic string
-	TwilioAccountSID      string
-	TwilioAPIKey          string
-	TwilioAPISecret       string
-	TwilioPhoneNumber     string
-	MailHost              string
-	MailPort              int
-	MailUsername          string
-	MailPassword          string
-	MailFrom              string
+	ServiceName            string
+	ConfigServiceURL       string
+	AutoMigrate            bool
+	ServerPort             string
+	DatabaseURL            string
+	KafkaBrokers           []string
+	KafkaConsumerGroup     string
+	KafkaConsumptionTopic  string
+	KafkaAlertCreatedTopic string
+	TwilioAccountSID       string
+	TwilioAPIKey           string
+	TwilioAPISecret        string
+	TwilioPhoneNumber      string
+	MailHost               string
+	MailPort               int
+	MailUsername           string
+	MailPassword           string
+	MailFrom               string
 }
 
 func Load() (Config, error) {
 	_ = godotenv.Load()
 
 	cfg := Config{
-		ServiceName:           getEnvOrDefault("SERVICE_NAME", "alert-service"),
-		ConfigServiceURL:      strings.TrimSpace(os.Getenv("CONFIG_SERVICE_URL")),
-		AutoMigrate:           getBoolEnvOrDefault("AUTO_MIGRATE", true),
-		ServerPort:            getEnvOrDefault("SERVER_PORT", "8085"),
-		DatabaseURL:           os.Getenv("DATABASE_URL"),
-		KafkaBrokers:          splitEnv("KAFKA_BROKERS", ""),
-		KafkaConsumerGroup:    getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
-		KafkaConsumptionTopic: getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
-		TwilioAccountSID:      os.Getenv("TWILIO_ACCOUNT_SID"),
-		TwilioAPIKey:          os.Getenv("TWILIO_API_KEY"),
-		TwilioAPISecret:       os.Getenv("TWILIO_API_SECRET"),
-		TwilioPhoneNumber:     os.Getenv("TWILIO_PHONE_NUMBER"),
-		MailHost:              os.Getenv("MAIL_HOST"),
-		MailUsername:          os.Getenv("MAIL_USERNAME"),
-		MailPassword:          os.Getenv("MAIL_PASSWORD"),
-		MailFrom:              os.Getenv("MAIL_FROM"),
+		ServiceName:            getEnvOrDefault("SERVICE_NAME", "alert-service"),
+		ConfigServiceURL:       strings.TrimSpace(os.Getenv("CONFIG_SERVICE_URL")),
+		AutoMigrate:            getBoolEnvOrDefault("AUTO_MIGRATE", true),
+		ServerPort:             getEnvOrDefault("SERVER_PORT", "8085"),
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
+		KafkaBrokers:           splitEnv("KAFKA_BROKERS", ""),
+		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
+		KafkaConsumptionTopic:  getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
+		KafkaAlertCreatedTopic: getEnvOrDefault("KAFKA_TOPIC_ALERT_CREATED", ""),
+		TwilioAccountSID:       os.Getenv("TWILIO_ACCOUNT_SID"),
+		TwilioAPIKey:           os.Getenv("TWILIO_API_KEY"),
+		TwilioAPISecret:        os.Getenv("TWILIO_API_SECRET"),
+		TwilioPhoneNumber:      os.Getenv("TWILIO_PHONE_NUMBER"),
+		MailHost:               os.Getenv("MAIL_HOST"),
+		MailUsername:           os.Getenv("MAIL_USERNAME"),
+		MailPassword:           os.Getenv("MAIL_PASSWORD"),
+		MailFrom:               os.Getenv("MAIL_FROM"),
 	}
 
 	if err := cfg.loadFromConfigService(); err != nil {
@@ -64,6 +66,9 @@ func Load() (Config, error) {
 	}
 	if cfg.KafkaConsumptionTopic == "" {
 		cfg.KafkaConsumptionTopic = "energy.consumption.recorded"
+	}
+	if cfg.KafkaAlertCreatedTopic == "" {
+		cfg.KafkaAlertCreatedTopic = "alert.created"
 	}
 	if len(cfg.KafkaBrokers) == 0 {
 		cfg.KafkaBrokers = splitCSV("localhost:9092")
@@ -123,6 +128,9 @@ func (c *Config) loadFromConfigService() error {
 	}
 	if c.KafkaConsumptionTopic == "" {
 		c.KafkaConsumptionTopic = getString(serviceData, "kafkaConsumptionTopic", "kafka_consumption_topic", "consumptionTopic", "topic")
+	}
+	if c.KafkaAlertCreatedTopic == "" {
+		c.KafkaAlertCreatedTopic = getString(serviceData, "kafkaAlertCreatedTopic", "kafka_alert_created_topic", "alertCreatedTopic")
 	}
 	if len(c.KafkaBrokers) == 0 {
 		c.KafkaBrokers = firstBrokers(serviceData, kafkaData)

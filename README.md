@@ -54,6 +54,7 @@ Opcional para desarrollo local sin Config Service:
 - `GET /api/v1/users/:userId/inactivity-rules`
 - `POST /api/v1/notification-preferences`
 - `GET /api/v1/users/:userId/notification-preferences`
+- `POST /api/v1/kafka/publish-test` (publica un evento de prueba en Kafka)
 
 ## Ejecucion local
 
