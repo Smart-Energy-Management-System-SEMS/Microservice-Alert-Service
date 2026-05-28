@@ -16,6 +16,7 @@ import (
 type Config struct {
 	ServiceName           string
 	ConfigServiceURL      string
+	AutoMigrate           bool
 	ServerPort            string
 	DatabaseURL           string
 	KafkaBrokers          []string
@@ -38,6 +39,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		ServiceName:           getEnvOrDefault("SERVICE_NAME", "alert-service"),
 		ConfigServiceURL:      strings.TrimSpace(os.Getenv("CONFIG_SERVICE_URL")),
+		AutoMigrate:           getBoolEnvOrDefault("AUTO_MIGRATE", true),
 		ServerPort:            getEnvOrDefault("SERVER_PORT", "8085"),
 		DatabaseURL:           os.Getenv("DATABASE_URL"),
 		KafkaBrokers:          splitEnv("KAFKA_BROKERS", ""),
@@ -261,4 +263,18 @@ func splitCSV(value string) []string {
 	}
 
 	return result
+}
+
+func getBoolEnvOrDefault(key string, defaultValue bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return defaultValue
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+
+	return parsed
 }

@@ -36,14 +36,18 @@ func main() {
 		logger.Fatalf("database error: %v", err)
 	}
 
-	if err := db.AutoMigrate(
-		&model.AlertThresholdModel{},
-		&model.InactivityRuleModel{},
-		&model.AlertModel{},
-		&model.NotificationPreferenceModel{},
-		&model.NotificationLogModel{},
-	); err != nil {
-		logger.Fatalf("migration error: %v", err)
+	if cfg.AutoMigrate {
+		if err := db.AutoMigrate(
+			&model.AlertThresholdModel{},
+			&model.InactivityRuleModel{},
+			&model.AlertModel{},
+			&model.NotificationPreferenceModel{},
+			&model.NotificationLogModel{},
+		); err != nil {
+			logger.Fatalf("migration error: %v", err)
+		}
+	} else {
+		logger.Println("auto-migrate disabled by AUTO_MIGRATE=false")
 	}
 
 	alertRepo := repositories.NewAlertRepository(db)
