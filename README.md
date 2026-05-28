@@ -1,114 +1,104 @@
 # Alert Service (SEMS)
 
-Microservicio de alertas para el Smart Energy Management System (SEMS). Gestiona umbrales, reglas de inactividad, alertas y notificaciones por email/SMS. Incluye listener Kafka para eventos de consumo.
+Microservicio de alertas para SEMS. Gestiona umbrales, reglas de inactividad, alertas y notificaciones (email/SMS), y consume eventos de consumo por Kafka.
 
-## Requisitos
+## Configuracion centralizada
 
-- Go 1.22+
-- PostgreSQL (Neon u otro)
-- Kafka
+Este servicio ahora prioriza configuracion desde un Config Service usando:
 
-## Configuracion
+- `GET /api/v1/config/{service-name}`
+- `GET /api/v1/config/services` (fallback)
+- `GET /api/v1/config/kafka`
 
-1. Copia el archivo .env.example a .env y completa los valores.
-2. Asegura que DATABASE_URL apunte a tu instancia de PostgreSQL.
-3. Configura credenciales de Twilio y Gmail SMTP.
+Variable principal:
 
-## Ejecutar
+- `CONFIG_SERVICE_URL`
+
+Si el Config Service no devuelve valores, el servicio usa fallback local seguro para no romper compatibilidad.
+
+## Variables locales del microservicio
+
+Mantener en `.env` solo variables sensibles o propias del despliegue:
+
+- `SERVER_PORT`
+- `SERVICE_NAME`
+- `CONFIG_SERVICE_URL`
+- `DATABASE_URL`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_API_KEY`
+- `TWILIO_API_SECRET`
+- `TWILIO_PHONE_NUMBER`
+- `MAIL_PORT`
+- `MAIL_USERNAME`
+- `MAIL_PASSWORD`
+- `MAIL_FROM`
+
+Opcional para desarrollo local sin Config Service:
+
+- `KAFKA_BROKERS` (ej. `localhost:29092`)
+- `KAFKA_CONSUMER_GROUP`
+- `KAFKA_CONSUMPTION_TOPIC`
+- `MAIL_HOST`
+
+## Endpoints
+
+- `GET /api/v1/health`
+- `GET /api/v1/alerts`
+- `GET /api/v1/alerts/:id`
+- `GET /api/v1/users/:userId/alerts`
+- `POST /api/v1/alerts`
+- `PATCH /api/v1/alerts/:id/status`
+- `POST /api/v1/thresholds`
+- `GET /api/v1/users/:userId/thresholds`
+- `POST /api/v1/inactivity-rules`
+- `GET /api/v1/users/:userId/inactivity-rules`
+- `POST /api/v1/notification-preferences`
+- `GET /api/v1/users/:userId/notification-preferences`
+
+## Ejecucion local
+
+1. Copia `.env.example` a `.env`.
+2. Define credenciales reales (DB, Twilio, correo).
+3. Si no tienes Config Service local, define tambien `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPIC`.
+4. Ejecuta:
 
 ```bash
 go mod tidy
 go run main.go
 ```
 
-El servicio expone la API REST en el puerto configurado (SERVER_PORT).
+## Docker Compose local
 
-## Ejecutar con Docker
-
-El proyecto incluye `Dockerfile` y `docker-compose.yml` para levantar el microservicio con PostgreSQL y Kafka locales.
+El proyecto incluye `docker-compose.yml` con PostgreSQL y Kafka locales:
 
 ```bash
 docker compose up --build
 ```
 
-La API quedara disponible en:
+API local:
 
-```bash
+```text
 http://localhost:8085
 ```
 
-Notas:
+## Azure Container Apps (recomendado)
 
-- El compose usa PostgreSQL local con `postgres://postgres:postgres@postgres:5432/alert_service?sslmode=disable`.
-- Dentro de Docker, Kafka se consume con `KAFKA_BROKERS=kafka:9092`.
-- El archivo `.env` se carga para el puerto y credenciales externas como Gmail/Twilio, pero no se copia dentro de la imagen.
-- Para cambiar el puerto local, define `SERVER_PORT` en `.env`.
+Para Azure Container Apps:
 
-## Endpoints
+- Configurar en variables de entorno:
+  - `SERVER_PORT`
+  - `SERVICE_NAME=alert-service`
+  - `CONFIG_SERVICE_URL` (URL interna/privada del Config Service)
+- Guardar secretos en Azure Key Vault o secretos de ACA:
+  - `DATABASE_URL`
+  - `TWILIO_*`
+  - `MAIL_USERNAME`
+  - `MAIL_PASSWORD`
+- Evitar hardcodear topics/brokers en la app; centralizarlos en Config Service.
+- Exponer solo puertos necesarios y usar networking privado entre microservicios cuando sea posible.
 
-- GET /api/v1/health
-- GET /api/v1/alerts
-- GET /api/v1/alerts/:id
-- GET /api/v1/users/:userId/alerts
-- POST /api/v1/alerts
-- PATCH /api/v1/alerts/:id/status
-- POST /api/v1/thresholds
-- GET /api/v1/users/:userId/thresholds
-- POST /api/v1/inactivity-rules
-- GET /api/v1/users/:userId/inactivity-rules
-- POST /api/v1/notification-preferences
-- GET /api/v1/users/:userId/notification-preferences
+## Notas tecnicas
 
-## Kafka
-
-Topic de consumo: energy.consumption.recorded
-
-Ejemplo de evento:
-
-```json
-{
-	"user_id": "uuid",
-	"device_id": "uuid",
-	"metric": "kwh",
-	"value": 15.5,
-	"recorded_at": "2026-05-26T00:00:00Z"
-}
-```
-
-## Notas
-
-- El dominio no depende de Gin, GORM, Kafka, Twilio ni SMTP.
-- Las migraciones se ejecutan automaticamente al iniciar el servicio.
-- Para notificaciones reales se recomienda integrar un proveedor de contactos de usuario.
-- Por defecto, el servicio usa MAIL_FROM o MAIL_USERNAME y TWILIO_PHONE_NUMBER como destinatarios de demo.
-
-## Keep-Alive para Render
-
-Si quieres evitar que el servicio entre en reposo por inactividad, puedes ejecutar un ping periodico contra tu URL publicada.
-
-Scripts incluidos:
-
-- `scripts/keep-alive.sh`
-- `scripts/keep-alive.ps1`
-
-Variables:
-
-- `TARGET_URL`: URL base del servicio en Render (ej. `https://tu-servicio.onrender.com`)
-- `PING_PATH`: ruta a consultar (default: `/api/v1/alerts`)
-- `INTERVAL_SECONDS`: intervalo entre pings en segundos (default: `600`)
-
-Ejemplo Bash:
-
-```bash
-TARGET_URL="https://tu-servicio.onrender.com" INTERVAL_SECONDS=600 bash scripts/keep-alive.sh
-```
-
-Ejemplo PowerShell:
-
-```powershell
-$env:TARGET_URL="https://tu-servicio.onrender.com"
-$env:INTERVAL_SECONDS="600"
-.\scripts\keep-alive.ps1
-```
-
-Importante: en Render, los servicios `Free` pueden suspenderse igual por politicas de la plataforma. Para evitar suspension garantizada, se recomienda plan `paid` o un worker/cron externo que haga los pings.
+- Las migraciones GORM se ejecutan al iniciar.
+- El dominio mantiene independencia de frameworks e infraestructura (DDD).
+- El consumidor Kafka se desactiva automaticamente si faltan brokers o topic.

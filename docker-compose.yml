@@ -7,11 +7,11 @@ services:
     env_file:
       - .env
     environment:
+      SERVICE_NAME: ${SERVICE_NAME:-alert-service}
       SERVER_PORT: ${SERVER_PORT:-8085}
+      CONFIG_SERVICE_URL: ${CONFIG_SERVICE_URL:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-alert_service}?sslmode=disable
       KAFKA_BROKERS: kafka:9092
-      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-alerts-service-group}
-      KAFKA_CONSUMPTION_TOPIC: ${KAFKA_CONSUMPTION_TOPIC:-energy.consumption.recorded}
     ports:
       - "${SERVER_PORT:-8085}:${SERVER_PORT:-8085}"
     depends_on:
