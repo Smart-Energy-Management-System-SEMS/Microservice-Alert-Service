@@ -31,6 +31,10 @@ func NewRouter(
 
 	api := router.Group("/api/v1")
 	{
+		api.GET("/health", func(ctx *gin.Context) {
+			ctx.JSON(200, gin.H{"status": "ok", "service": "alert-service"})
+		})
+
 		api.GET("/alerts", alertController.GetAlerts)
 		api.GET("/alerts/:id", alertController.GetAlertByID)
 		api.GET("/users/:userId/alerts", alertController.GetAlertsByUser)
