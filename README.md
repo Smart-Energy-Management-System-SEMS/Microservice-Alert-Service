@@ -46,6 +46,7 @@ Notas:
 
 ## Endpoints
 
+- GET /api/v1/health
 - GET /api/v1/alerts
 - GET /api/v1/alerts/:id
 - GET /api/v1/users/:userId/alerts
