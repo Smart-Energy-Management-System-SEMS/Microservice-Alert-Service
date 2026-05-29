@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"strings"
 
 	"github.com/segmentio/kafka-go"
 
@@ -67,20 +66,4 @@ func (p *AlertEventProducer) PublishJSON(ctx context.Context, key string, payloa
 
 	p.logger.Printf("kafka event published topic=%s key=%s", p.topic, key)
 	return nil
-}
-
-func normalizeKafkaHosts(brokers []string) []string {
-	out := make([]string, 0, len(brokers))
-	for _, b := range brokers {
-		t := strings.TrimSpace(b)
-		if t == "" {
-			continue
-		}
-		if strings.HasPrefix(strings.ToLower(t), "kafka:") {
-			out = append(out, "localhost:"+strings.TrimPrefix(t, "kafka:"))
-			continue
-		}
-		out = append(out, t)
-	}
-	return out
 }
