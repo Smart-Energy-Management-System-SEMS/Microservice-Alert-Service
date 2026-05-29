@@ -79,7 +79,7 @@ docker compose up --build
 API local:
 
 ```text
-http://localhost:8086
+http://localhost:8085
 ```
 
 ## Azure Container Apps (recomendado)
