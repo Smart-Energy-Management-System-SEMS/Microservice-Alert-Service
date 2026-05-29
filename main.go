@@ -31,6 +31,8 @@ func main() {
 	if err != nil {
 		logger.Fatalf("config error: %v", err)
 	}
+	logger.Printf("kafka brokers resolved: %v", cfg.KafkaBrokers)
+	logger.Printf("kafka consumption topic: %s | group: %s", cfg.KafkaConsumptionTopic, cfg.KafkaConsumerGroup)
 
 	db, err := gormconfig.NewDatabase(cfg.DatabaseURL)
 	if err != nil {
