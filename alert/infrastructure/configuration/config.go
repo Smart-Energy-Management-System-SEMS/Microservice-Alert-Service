@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -265,13 +266,37 @@ func normalizeKafkaBrokersForRuntime(brokers []string) []string {
 	normalized := make([]string, 0, len(brokers))
 	for _, broker := range brokers {
 		trimmed := strings.TrimSpace(broker)
-		if strings.HasPrefix(strings.ToLower(trimmed), "kafka:") {
-			normalized = append(normalized, "localhost:"+strings.TrimPrefix(trimmed, "kafka:"))
-			continue
-		}
-		normalized = append(normalized, trimmed)
+		normalized = append(normalized, rewriteKafkaHostToLocalhost(trimmed))
 	}
 	return normalized
+}
+
+func rewriteKafkaHostToLocalhost(broker string) string {
+	if broker == "" {
+		return broker
+	}
+
+	// Plain host:port form
+	parts := strings.Split(broker, ":")
+	if len(parts) == 2 && strings.EqualFold(strings.TrimSpace(parts[0]), "kafka") {
+		return "localhost:" + strings.TrimSpace(parts[1])
+	}
+
+	// URL-like form, e.g. PLAINTEXT://kafka:29092
+	if strings.Contains(broker, "://") {
+		parsed, err := url.Parse(broker)
+		if err == nil && strings.EqualFold(parsed.Hostname(), "kafka") {
+			port := parsed.Port()
+			if port != "" {
+				parsed.Host = "localhost:" + port
+			} else {
+				parsed.Host = "localhost"
+			}
+			return parsed.String()
+		}
+	}
+
+	return broker
 }
 
 func isRunningInContainer() bool {
