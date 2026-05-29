@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -73,6 +74,7 @@ func Load() (Config, error) {
 	if len(cfg.KafkaBrokers) == 0 {
 		cfg.KafkaBrokers = splitCSV("localhost:9092")
 	}
+	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers)
 	if cfg.MailHost == "" {
 		cfg.MailHost = "smtp.gmail.com"
 	}
@@ -113,6 +115,8 @@ func (c *Config) loadFromConfigService() error {
 		}
 		if nested, ok := servicesData[c.ServiceName].(map[string]any); ok {
 			serviceData = nested
+		} else if list := getServicesListEntry(servicesData, c.ServiceName); len(list) > 0 {
+			serviceData = list
 		}
 	}
 	kafkaData, err := fetchConfigMap(client, fmt.Sprintf("%s/api/v1/config/kafka", baseURL))
@@ -201,6 +205,28 @@ func getString(values map[string]any, keys ...string) string {
 	return ""
 }
 
+func getServicesListEntry(values map[string]any, serviceName string) map[string]any {
+	servicesRaw, ok := values["services"]
+	if !ok {
+		return map[string]any{}
+	}
+	services, ok := servicesRaw.([]any)
+	if !ok {
+		return map[string]any{}
+	}
+	for _, item := range services {
+		service, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := getString(service, "name", "serviceName", "service_name")
+		if strings.EqualFold(strings.TrimSpace(name), strings.TrimSpace(serviceName)) {
+			return service
+		}
+	}
+	return map[string]any{}
+}
+
 func firstBrokers(maps ...map[string]any) []string {
 	for _, m := range maps {
 		if len(m) == 0 {
@@ -229,6 +255,28 @@ func firstBrokers(maps ...map[string]any) []string {
 		}
 	}
 	return []string{}
+}
+
+func normalizeKafkaBrokersForRuntime(brokers []string) []string {
+	if len(brokers) == 0 || isRunningInContainer() {
+		return brokers
+	}
+
+	normalized := make([]string, 0, len(brokers))
+	for _, broker := range brokers {
+		trimmed := strings.TrimSpace(broker)
+		if strings.HasPrefix(strings.ToLower(trimmed), "kafka:") {
+			normalized = append(normalized, "localhost:"+strings.TrimPrefix(trimmed, "kafka:"))
+			continue
+		}
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
+}
+
+func isRunningInContainer() bool {
+	_, err := os.Stat(filepath.Clean("/.dockerenv"))
+	return err == nil
 }
 
 func getEnvOrDefault(key string, defaultValue string) string {
