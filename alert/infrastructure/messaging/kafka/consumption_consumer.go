@@ -45,6 +45,10 @@ func normalizeKafkaHosts(brokers []string) []string {
 			out = append(out, "localhost:"+strings.TrimPrefix(t, "kafka:"))
 			continue
 		}
+		if strings.EqualFold(t, "localhost:29092") || strings.EqualFold(t, "127.0.0.1:29092") {
+			out = append(out, "localhost:9092")
+			continue
+		}
 		out = append(out, t)
 	}
 	return out

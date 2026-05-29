@@ -281,6 +281,9 @@ func rewriteKafkaHostToLocalhost(broker string) string {
 	if len(parts) == 2 && strings.EqualFold(strings.TrimSpace(parts[0]), "kafka") {
 		return "localhost:" + strings.TrimSpace(parts[1])
 	}
+	if len(parts) == 2 && (strings.EqualFold(strings.TrimSpace(parts[0]), "localhost") || strings.EqualFold(strings.TrimSpace(parts[0]), "127.0.0.1")) && strings.TrimSpace(parts[1]) == "29092" {
+		return "localhost:9092"
+	}
 
 	// URL-like form, e.g. PLAINTEXT://kafka:29092
 	if strings.Contains(broker, "://") {
