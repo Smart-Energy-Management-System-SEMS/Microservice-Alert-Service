@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/segmentio/kafka-go"
 
@@ -19,12 +20,14 @@ type AlertEventProducer struct {
 
 func NewAlertEventProducer(cfg configuration.Config, logger *log.Logger) *AlertEventProducer {
 	topic := cfg.KafkaAlertCreatedTopic
-	if len(cfg.KafkaBrokers) == 0 || topic == "" {
+	brokers := normalizeKafkaHosts(cfg.KafkaBrokers)
+	logger.Printf("producer brokers effective: %v", brokers)
+	if len(brokers) == 0 || topic == "" {
 		return &AlertEventProducer{enabled: false}
 	}
 
 	writer := &kafka.Writer{
-		Addr:         kafka.TCP(cfg.KafkaBrokers...),
+		Addr:         kafka.TCP(brokers...),
 		Topic:        topic,
 		RequiredAcks: kafka.RequireOne,
 	}
@@ -64,4 +67,20 @@ func (p *AlertEventProducer) PublishJSON(ctx context.Context, key string, payloa
 
 	p.logger.Printf("kafka event published topic=%s key=%s", p.topic, key)
 	return nil
+}
+
+func normalizeKafkaHosts(brokers []string) []string {
+	out := make([]string, 0, len(brokers))
+	for _, b := range brokers {
+		t := strings.TrimSpace(b)
+		if t == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(t), "kafka:") {
+			out = append(out, "localhost:"+strings.TrimPrefix(t, "kafka:"))
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }

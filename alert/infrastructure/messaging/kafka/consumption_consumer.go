@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/segmentio/kafka-go"
 
@@ -18,17 +19,35 @@ type ConsumptionConsumer struct {
 }
 
 func NewConsumptionConsumer(cfg configuration.Config, handler *eventhandlers.ConsumptionEventHandler, logger *log.Logger) *ConsumptionConsumer {
-	if len(cfg.KafkaBrokers) == 0 || cfg.KafkaConsumptionTopic == "" {
+	brokers := normalizeKafkaHosts(cfg.KafkaBrokers)
+	logger.Printf("consumer brokers effective: %v", brokers)
+	if len(brokers) == 0 || cfg.KafkaConsumptionTopic == "" {
 		return &ConsumptionConsumer{enabled: false}
 	}
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: cfg.KafkaBrokers,
+		Brokers: brokers,
 		Topic:   cfg.KafkaConsumptionTopic,
 		GroupID: cfg.KafkaConsumerGroup,
 	})
 
 	return &ConsumptionConsumer{reader: reader, handler: handler, logger: logger, enabled: true}
+}
+
+func normalizeKafkaHosts(brokers []string) []string {
+	out := make([]string, 0, len(brokers))
+	for _, b := range brokers {
+		t := strings.TrimSpace(b)
+		if t == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(t), "kafka:") {
+			out = append(out, "localhost:"+strings.TrimPrefix(t, "kafka:"))
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 func (c *ConsumptionConsumer) Enabled() bool {
