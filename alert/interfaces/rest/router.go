@@ -1,6 +1,8 @@
 package rest
 
 import (
+	"net/http"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
@@ -18,11 +20,32 @@ func NewRouter(
 	inactivityQuery *queryservices.InactivityRuleQueryService,
 	preferenceCommand *commandservices.NotificationPreferenceCommandService,
 	preferenceQuery *queryservices.NotificationPreferenceQueryService,
+	kafkaController *controllers.KafkaController,
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
-	router.Use(cors.Default())
+	router.Use(cors.New(cors.Config{
+		AllowOrigins: []string{
+			"http://localhost:3000",
+			"http://localhost:5173",
+		},
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPatch,
+			http.MethodPut,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Accept",
+			"Authorization",
+		},
+		AllowCredentials: false,
+	}))
 
 	alertController := controllers.NewAlertController(alertCommand, alertQuery)
 	thresholdController := controllers.NewThresholdController(thresholdCommand, thresholdQuery)
@@ -49,6 +72,7 @@ func NewRouter(
 
 		api.POST("/notification-preferences", preferenceController.CreatePreference)
 		api.GET("/users/:userId/notification-preferences", preferenceController.GetPreferencesByUser)
+		api.POST("/kafka/publish-test", kafkaController.PublishTestEvent)
 	}
 
 	return router

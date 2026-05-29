@@ -7,11 +7,11 @@ services:
     env_file:
       - .env
     environment:
+      SERVICE_NAME: ${SERVICE_NAME:-alert-service}
       SERVER_PORT: ${SERVER_PORT:-8085}
+      CONFIG_SERVICE_URL: ${CONFIG_SERVICE_URL:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-alert_service}?sslmode=disable
       KAFKA_BROKERS: kafka:9092
-      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-alerts-service-group}
-      KAFKA_CONSUMPTION_TOPIC: ${KAFKA_CONSUMPTION_TOPIC:-energy.consumption.recorded}
     ports:
       - "${SERVER_PORT:-8085}:${SERVER_PORT:-8085}"
     depends_on:
@@ -42,17 +42,21 @@ services:
   kafka:
     image: apache/kafka:latest
     container_name: sems-kafka
+    hostname: kafka
     ports:
       - "9092:9092"
-      - "29092:29092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://:9092,EXTERNAL://:29092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
     restart: unless-stopped

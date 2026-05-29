@@ -21,6 +21,7 @@ import (
 	"microservice-alert-service/alert/infrastructure/persistence/gorm/repositories"
 	"microservice-alert-service/alert/infrastructure/persistence/memory"
 	"microservice-alert-service/alert/interfaces/rest"
+	"microservice-alert-service/alert/interfaces/rest/controllers"
 )
 
 func main() {
@@ -30,20 +31,26 @@ func main() {
 	if err != nil {
 		logger.Fatalf("config error: %v", err)
 	}
+	logger.Printf("kafka brokers resolved: %v", cfg.KafkaBrokers)
+	logger.Printf("kafka consumption topic: %s | group: %s", cfg.KafkaConsumptionTopic, cfg.KafkaConsumerGroup)
 
 	db, err := gormconfig.NewDatabase(cfg.DatabaseURL)
 	if err != nil {
 		logger.Fatalf("database error: %v", err)
 	}
 
-	if err := db.AutoMigrate(
-		&model.AlertThresholdModel{},
-		&model.InactivityRuleModel{},
-		&model.AlertModel{},
-		&model.NotificationPreferenceModel{},
-		&model.NotificationLogModel{},
-	); err != nil {
-		logger.Fatalf("migration error: %v", err)
+	if cfg.AutoMigrate {
+		if err := db.AutoMigrate(
+			&model.AlertThresholdModel{},
+			&model.InactivityRuleModel{},
+			&model.AlertModel{},
+			&model.NotificationPreferenceModel{},
+			&model.NotificationLogModel{},
+		); err != nil {
+			logger.Fatalf("migration error: %v", err)
+		}
+	} else {
+		logger.Println("auto-migrate disabled by AUTO_MIGRATE=false")
 	}
 
 	alertRepo := repositories.NewAlertRepository(db)
@@ -89,6 +96,8 @@ func main() {
 		alertCommandService,
 		logger,
 	)
+	kafkaProducer := kafka.NewAlertEventProducer(cfg, logger)
+	kafkaController := controllers.NewKafkaController(kafkaProducer)
 
 	router := rest.NewRouter(
 		alertCommandService,
@@ -99,6 +108,7 @@ func main() {
 		inactivityQueryService,
 		preferenceCommandService,
 		preferenceQueryService,
+		kafkaController,
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
