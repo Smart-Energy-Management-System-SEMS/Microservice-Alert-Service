@@ -16,14 +16,21 @@ Variable principal:
 
 Si el Config Service no devuelve valores, el servicio usa fallback local seguro para no romper compatibilidad.
 
-## Variables locales del microservicio
+## Variables requeridas
 
 Mantener en `.env` solo variables sensibles o propias del despliegue:
 
-- `SERVER_PORT`
+- `PORT` (recomendado para contenedores/Azure)
+- `SERVER_PORT` (compatibilidad legacy local)
 - `SERVICE_NAME`
 - `CONFIG_SERVICE_URL`
 - `DATABASE_URL`
+- `KAFKA_BROKERS`
+- `KAFKA_SECURITY_PROTOCOL`
+- `KAFKA_SASL_MECHANISM`
+- `KAFKA_USERNAME`
+- `KAFKA_PASSWORD`
+- `GIN_MODE`
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_API_KEY`
 - `TWILIO_API_SECRET`
@@ -68,6 +75,10 @@ go mod tidy
 go run main.go
 ```
 
+Compatibilidad local Kafka:
+
+- `KAFKA_BROKERS=localhost:9092`
+
 ## Docker Compose local
 
 El proyecto incluye `docker-compose.yml` con PostgreSQL y Kafka locales:
@@ -82,15 +93,60 @@ API local:
 http://localhost:8085
 ```
 
+## Docker
+
+Build:
+
+```bash
+docker build -t sems-alert-service:latest .
+```
+
+Run (ejemplo local):
+
+```bash
+docker run --rm -p 8080:8080 ^
+  -e PORT=8080 ^
+  -e GIN_MODE=release ^
+  -e CONFIG_SERVICE_URL=http://host.docker.internal:8090 ^
+  -e KAFKA_BROKERS=host.docker.internal:9092 ^
+  -e DATABASE_URL="postgres://USER:PASSWORD@HOST:5432/DB_NAME?sslmode=disable" ^
+  sems-alert-service:latest
+```
+
 ## Azure Container Apps (recomendado)
 
-Para Azure Container Apps:
+Para Azure Container Apps, configurar variables de entorno (sin localhost):
 
-- Configurar en variables de entorno:
-  - `SERVER_PORT`
-  - `SERVICE_NAME=alert-service`
-  - `CONFIG_SERVICE_URL` (URL interna/privada del Config Service)
+- `PORT=8080`
+- `SERVICE_NAME=alert-service`
+- `GIN_MODE=release`
+- `CONFIG_SERVICE_URL` (URL interna/privada del Config Service)
+- `KAFKA_BROKERS` (broker privado, ej. `broker:9092`)
+- `KAFKA_SECURITY_PROTOCOL`
+- `KAFKA_SASL_MECHANISM`
+- `KAFKA_USERNAME`
+- `KAFKA_PASSWORD`
+- `DATABASE_URL`
+
+Ejemplo de creacion/actualizacion (referencial):
+
+```bash
+az containerapp update \
+  --name sems-alert-service \
+  --resource-group <RESOURCE_GROUP> \
+  --set-env-vars PORT=8080 GIN_MODE=release SERVICE_NAME=alert-service \
+  --set-env-vars CONFIG_SERVICE_URL=https://<config-service-interno> \
+  --set-env-vars KAFKA_BROKERS=<broker-privado>:9092 \
+  --set-env-vars KAFKA_SECURITY_PROTOCOL=SASL_SSL \
+  --set-env-vars KAFKA_SASL_MECHANISM=PLAIN \
+  --set-env-vars KAFKA_USERNAME=<kafka-username> \
+  --set-env-vars KAFKA_PASSWORD=<kafka-password> \
+  --set-env-vars DATABASE_URL=<database-url>
+```
+
 - Guardar secretos en Azure Key Vault o secretos de ACA:
+  - `KAFKA_USERNAME`
+  - `KAFKA_PASSWORD`
   - `DATABASE_URL`
   - `TWILIO_*`
   - `MAIL_USERNAME`

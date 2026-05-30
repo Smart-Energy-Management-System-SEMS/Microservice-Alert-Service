@@ -43,7 +43,7 @@ func Load() (Config, error) {
 		ServiceName:            getEnvOrDefault("SERVICE_NAME", "alert-service"),
 		ConfigServiceURL:       strings.TrimSpace(os.Getenv("CONFIG_SERVICE_URL")),
 		AutoMigrate:            getBoolEnvOrDefault("AUTO_MIGRATE", true),
-		ServerPort:             getEnvOrDefault("SERVER_PORT", "8085"),
+		ServerPort:             getFirstEnv([]string{"PORT", "SERVER_PORT"}, ""),
 		DatabaseURL:            os.Getenv("DATABASE_URL"),
 		KafkaBrokers:           splitEnv("KAFKA_BROKERS", ""),
 		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
@@ -61,6 +61,10 @@ func Load() (Config, error) {
 
 	if err := cfg.loadFromConfigService(); err != nil {
 		return cfg, err
+	}
+
+	if cfg.ServerPort == "" {
+		cfg.ServerPort = "8080"
 	}
 
 	if cfg.KafkaConsumerGroup == "" {

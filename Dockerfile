@@ -17,12 +17,12 @@ RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 
 ENV GIN_MODE=release
-ENV SERVER_PORT=8085
+ENV PORT=8080
 
 COPY --from=builder /out/alert-service /app/alert-service
 
 USER app
 
-EXPOSE 8085
+EXPOSE 8080
 
 ENTRYPOINT ["/app/alert-service"]

@@ -6,5 +6,4 @@ tmp/
 bin/
 dist/
 coverage/
-Dockerfile
 docker-compose.yml
