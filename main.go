@@ -79,7 +79,8 @@ func main() {
 		logger,
 	)
 
-	alertCommandService := commandservices.NewAlertCommandService(alertRepo, notificationService, logger)
+	kafkaProducer := kafka.NewAlertEventProducer(cfg, logger)
+	alertCommandService := commandservices.NewAlertCommandService(alertRepo, kafkaProducer, notificationService, logger)
 	thresholdCommandService := commandservices.NewThresholdCommandService(thresholdRepo, logger)
 	inactivityCommandService := commandservices.NewInactivityRuleCommandService(inactivityRepo, logger)
 	preferenceCommandService := commandservices.NewNotificationPreferenceCommandService(preferenceRepo, logger)
@@ -96,7 +97,6 @@ func main() {
 		alertCommandService,
 		logger,
 	)
-	kafkaProducer := kafka.NewAlertEventProducer(cfg, logger)
 	kafkaController := controllers.NewKafkaController(kafkaProducer)
 
 	router := rest.NewRouter(

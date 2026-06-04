@@ -21,13 +21,19 @@ import (
 // stays decoupled from concrete infrastructure (Dependency Inversion).
 type AlertCommandService struct {
 	repo     outboundservices.AlertRepository
+	publisher outboundservices.AlertEventPublisher
 	notifier *NotificationService
 	logger   *log.Logger
 }
 
 // NewAlertCommandService is the constructor; it wires the injected dependencies.
-func NewAlertCommandService(repo outboundservices.AlertRepository, notifier *NotificationService, logger *log.Logger) *AlertCommandService {
-	return &AlertCommandService{repo: repo, notifier: notifier, logger: logger}
+func NewAlertCommandService(
+	repo outboundservices.AlertRepository,
+	publisher outboundservices.AlertEventPublisher,
+	notifier *NotificationService,
+	logger *log.Logger,
+) *AlertCommandService {
+	return &AlertCommandService{repo: repo, publisher: publisher, notifier: notifier, logger: logger}
 }
 
 // CreateAlert builds an Alert entity from the command and persists it.
@@ -57,6 +63,13 @@ func (s *AlertCommandService) CreateAlert(ctx context.Context, cmd commands.Crea
 		return nil, err
 	}
 
+	if s.publisher != nil {
+		if err := s.publisher.PublishJSON(ctx, alert.AlertID.String(), buildAlertCreatedEvent(alert)); err != nil {
+			s.logger.Printf("alert event publish error: %v", err)
+			return alert, err
+		}
+	}
+
 	return alert, nil
 }
 
@@ -82,4 +95,33 @@ func (s *AlertCommandService) CreateAlertAndNotify(ctx context.Context, cmd comm
 // UpdateAlertStatus changes the status of an existing alert (e.g. resolved).
 func (s *AlertCommandService) UpdateAlertStatus(ctx context.Context, cmd commands.UpdateAlertStatusCommand) error {
 	return s.repo.UpdateStatus(ctx, cmd.AlertID, cmd.Status, cmd.ResolvedAt)
+}
+
+func buildAlertCreatedEvent(alert *entities.Alert) map[string]any {
+	event := map[string]any{
+		"event":        "alert.created",
+		"alert_id":     alert.AlertID.String(),
+		"user_id":      alert.UserID.String(),
+		"device_id":    alert.DeviceID.String(),
+		"alert_type":   alert.AlertType,
+		"title":        alert.Title,
+		"message":      alert.Message,
+		"severity":     alert.Severity,
+		"status":       alert.Status,
+		"triggered_at": alert.TriggeredAt,
+	}
+
+	if alert.ThresholdID != nil {
+		event["threshold_id"] = alert.ThresholdID.String()
+	}
+
+	if alert.InactivityRuleID != nil {
+		event["inactivity_rule_id"] = alert.InactivityRuleID.String()
+	}
+
+	if alert.ResolvedAt != nil {
+		event["resolved_at"] = alert.ResolvedAt
+	}
+
+	return event
 }

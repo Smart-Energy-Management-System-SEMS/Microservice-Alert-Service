@@ -23,6 +23,11 @@ type AlertRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]entities.Alert, error)
 }
 
+// AlertEventPublisher emits integration events after an alert is created.
+type AlertEventPublisher interface {
+	PublishJSON(ctx context.Context, key string, payload any) error
+}
+
 // AlertThresholdRepository persists thresholds and lists the active ones used
 // during event evaluation.
 type AlertThresholdRepository interface {
