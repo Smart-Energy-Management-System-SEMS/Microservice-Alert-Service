@@ -45,6 +45,7 @@ Opcional para desarrollo local sin Config Service:
 - `KAFKA_BROKERS` (ej. `localhost:9092`)
 - `KAFKA_CONSUMER_GROUP`
 - `KAFKA_CONSUMPTION_TOPIC`
+- `KAFKA_TOPICS` (topics a autocrear en Docker, separados por comas)
 - `MAIL_HOST`
 
 ## Endpoints
@@ -86,6 +87,8 @@ El proyecto incluye `docker-compose.yml` con PostgreSQL y Kafka locales:
 ```bash
 docker compose up --build
 ```
+
+Al levantar Docker Compose, el servicio `kafka-topics-init` espera a Kafka y crea automaticamente los topics definidos en `KAFKA_TOPICS`.
 
 API local:
 
