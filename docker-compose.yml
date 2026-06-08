@@ -69,7 +69,7 @@ services:
       - .env
     environment:
       KAFKA_BOOTSTRAP_SERVER: kafka:9092
-      KAFKA_TOPICS: ${KAFKA_TOPICS:-energy.consumption.recorded,alert.created,alert.sent,payment.completed}
+      KAFKA_TOPICS: ${KAFKA_TOPICS:-energy.consumption.recorded,alert.created}
     volumes:
       - ./scripts/create-topics.sh:/scripts/create-topics.sh:ro
     depends_on:
