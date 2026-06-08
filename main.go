@@ -32,7 +32,7 @@ func main() {
 		logger.Fatalf("config error: %v", err)
 	}
 	logger.Printf("kafka brokers resolved: %v", cfg.KafkaBrokers)
-	logger.Printf("kafka consumption topic: %s | group: %s", cfg.KafkaConsumptionTopic, cfg.KafkaConsumerGroup)
+	logger.Printf("kafka consumption topics: %v | group: %s", cfg.KafkaConsumptionTopics, cfg.KafkaConsumerGroup)
 
 	db, err := gormconfig.NewDatabase(cfg.DatabaseURL)
 	if err != nil {
@@ -90,7 +90,7 @@ func main() {
 	inactivityQueryService := queryservices.NewInactivityRuleQueryService(inactivityRepo)
 	preferenceQueryService := queryservices.NewNotificationPreferenceQueryService(preferenceRepo)
 
-	eventHandler := eventhandlers.NewConsumptionEventHandler(
+	eventHandler := eventhandlers.NewIntegrationEventHandler(
 		thresholdRepo,
 		inactivityRepo,
 		deviceActivityRepo,
@@ -116,9 +116,9 @@ func main() {
 
 	consumer := kafka.NewConsumptionConsumer(cfg, eventHandler, logger)
 	if consumer.Enabled() {
-		go consumer.Start(ctx)
+		go consumer.Start(ctx, eventHandler)
 	} else {
-		logger.Println("kafka consumer disabled: missing brokers or topic")
+		logger.Println("kafka consumer disabled: missing brokers or topics")
 	}
 
 	server := &http.Server{

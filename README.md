@@ -1,6 +1,6 @@
 # Alert Service (SEMS)
 
-Microservicio de alertas para SEMS. Gestiona umbrales, reglas de inactividad, alertas y notificaciones (email/SMS), y consume eventos de consumo por Kafka.
+Microservicio de alertas para SEMS. Gestiona umbrales, reglas de inactividad, alertas y notificaciones (email/SMS), y consume eventos de multiples microservicios por Kafka.
 
 ## Configuracion centralizada
 
@@ -26,6 +26,7 @@ Mantener en `.env` solo variables sensibles o propias del despliegue:
 - `CONFIG_SERVICE_URL`
 - `DATABASE_URL`
 - `KAFKA_BROKERS`
+- `KAFKA_CONSUMPTION_TOPICS`
 - `KAFKA_SECURITY_PROTOCOL`
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`
@@ -44,6 +45,7 @@ Opcional para desarrollo local sin Config Service:
 
 - `KAFKA_BROKERS` (ej. `localhost:9092`)
 - `KAFKA_CONSUMER_GROUP`
+- `KAFKA_CONSUMPTION_TOPICS`
 - `KAFKA_CONSUMPTION_TOPIC`
 - `KAFKA_TOPICS` (topics a autocrear en Docker, separados por comas)
 - `MAIL_HOST`
@@ -68,7 +70,7 @@ Opcional para desarrollo local sin Config Service:
 
 1. Copia `.env.example` a `.env`.
 2. Define credenciales reales (DB, Twilio, correo).
-3. Si no tienes Config Service local, define tambien `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPIC`.
+3. Si no tienes Config Service local, define tambien `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPICS`. `KAFKA_CONSUMPTION_TOPIC` sigue disponible como fallback legacy de un solo topic.
 4. Ejecuta:
 
 ```bash
@@ -161,4 +163,5 @@ az containerapp update \
 
 - Las migraciones GORM se ejecutan al iniciar.
 - El dominio mantiene independencia de frameworks e infraestructura (DDD).
-- El consumidor Kafka se desactiva automaticamente si faltan brokers o topic.
+- El consumidor Kafka se desactiva automaticamente si faltan brokers o topics.
+- `Alerts` ahora puede suscribirse a multiples topics. Los eventos de energia (`energy.consumption.recorded`, `energy.reading.created`) siguen evaluando thresholds e inactividad; los eventos de Device, Analytics, IAM, Payments, Subscription, Invoice y Monitoring pueden generar alertas/notificaciones de negocio segun el tipo de evento.

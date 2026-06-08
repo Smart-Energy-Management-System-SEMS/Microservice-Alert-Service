@@ -23,6 +23,7 @@ type Config struct {
 	DatabaseURL            string
 	KafkaBrokers           []string
 	KafkaConsumerGroup     string
+	KafkaConsumptionTopics []string
 	KafkaConsumptionTopic  string
 	KafkaAlertCreatedTopic string
 	TwilioAccountSID       string
@@ -47,6 +48,7 @@ func Load() (Config, error) {
 		DatabaseURL:            os.Getenv("DATABASE_URL"),
 		KafkaBrokers:           splitEnv("KAFKA_BROKERS", ""),
 		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
+		KafkaConsumptionTopics: getTopicsFromEnv(),
 		KafkaConsumptionTopic:  getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
 		KafkaAlertCreatedTopic: getEnvOrDefault("KAFKA_TOPIC_ALERT_CREATED", ""),
 		TwilioAccountSID:       os.Getenv("TWILIO_ACCOUNT_SID"),
@@ -70,8 +72,14 @@ func Load() (Config, error) {
 	if cfg.KafkaConsumerGroup == "" {
 		cfg.KafkaConsumerGroup = "alert-service-group"
 	}
+	if len(cfg.KafkaConsumptionTopics) == 0 && cfg.KafkaConsumptionTopic != "" {
+		cfg.KafkaConsumptionTopics = splitCSV(cfg.KafkaConsumptionTopic)
+	}
+	if len(cfg.KafkaConsumptionTopics) == 0 {
+		cfg.KafkaConsumptionTopics = defaultKafkaConsumptionTopics()
+	}
 	if cfg.KafkaConsumptionTopic == "" {
-		cfg.KafkaConsumptionTopic = "energy.consumption.recorded"
+		cfg.KafkaConsumptionTopic = cfg.KafkaConsumptionTopics[0]
 	}
 	if cfg.KafkaAlertCreatedTopic == "" {
 		cfg.KafkaAlertCreatedTopic = "alert.created"
@@ -135,6 +143,9 @@ func (c *Config) loadFromConfigService() error {
 	if c.KafkaConsumerGroup == "" {
 		c.KafkaConsumerGroup = getString(serviceData, "kafkaConsumerGroup", "kafka_consumer_group", "consumerGroup", "groupId")
 	}
+	if len(c.KafkaConsumptionTopics) == 0 {
+		c.KafkaConsumptionTopics = getStringSlice(serviceData, "kafkaConsumptionTopics", "kafka_consumption_topics", "consumptionTopics", "topics")
+	}
 	if c.KafkaConsumptionTopic == "" {
 		c.KafkaConsumptionTopic = getString(serviceData, "kafkaConsumptionTopic", "kafka_consumption_topic", "consumptionTopic", "topic")
 	}
@@ -149,6 +160,12 @@ func (c *Config) loadFromConfigService() error {
 	}
 	if c.MailFrom == "" {
 		c.MailFrom = getString(serviceData, "mailFrom", "mail_from")
+	}
+	if len(c.KafkaConsumptionTopics) == 0 && c.KafkaConsumptionTopic != "" {
+		c.KafkaConsumptionTopics = splitCSV(c.KafkaConsumptionTopic)
+	}
+	if len(c.KafkaConsumptionTopics) > 0 && c.KafkaConsumptionTopic == "" {
+		c.KafkaConsumptionTopic = c.KafkaConsumptionTopics[0]
 	}
 
 	return nil
@@ -208,6 +225,40 @@ func getString(values map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func getStringSlice(values map[string]any, keys ...string) []string {
+	for _, key := range keys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+
+		switch typed := value.(type) {
+		case string:
+			parts := splitCSV(typed)
+			if len(parts) > 0 {
+				return parts
+			}
+		case []any:
+			out := make([]string, 0, len(typed))
+			for _, entry := range typed {
+				asString, ok := entry.(string)
+				if !ok {
+					continue
+				}
+				trimmed := strings.TrimSpace(asString)
+				if trimmed != "" {
+					out = append(out, trimmed)
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+
+	return nil
 }
 
 func getServicesListEntry(values map[string]any, serviceName string) map[string]any {
@@ -340,6 +391,20 @@ func splitEnv(key string, defaultValue string) []string {
 	return splitCSV(value)
 }
 
+func getTopicsFromEnv() []string {
+	topics := splitEnv("KAFKA_CONSUMPTION_TOPICS", "")
+	if len(topics) > 0 {
+		return topics
+	}
+
+	legacyTopic := getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, "")
+	if legacyTopic == "" {
+		return nil
+	}
+
+	return splitCSV(legacyTopic)
+}
+
 func splitCSV(value string) []string {
 	parts := strings.Split(value, ",")
 	result := make([]string, 0, len(parts))
@@ -351,6 +416,41 @@ func splitCSV(value string) []string {
 	}
 
 	return result
+}
+
+func defaultKafkaConsumptionTopics() []string {
+	return []string{
+		"analytics.anomaly.detected",
+		"analytics.bill_prediction.generated",
+		"analytics.consumption_ranking.generated",
+		"analytics.device_identified",
+		"analytics.recommendation.generated",
+		"device.configuration.updated",
+		"device.event.recorded",
+		"device.linked",
+		"device.registered",
+		"device.status.updated",
+		"device.unlinked",
+		"energy.consumption.recorded",
+		"energy.reading.created",
+		"iam.role-assignment.requested",
+		"iam.role.assigned",
+		"iam.user.logged-in",
+		"iam.user.registered",
+		"invoice.generated",
+		"monitoring.alert.created",
+		"monitoring.reading.ingest",
+		"monitoring.reading.processed",
+		"payment.failed",
+		"payment.method.added",
+		"payment.processed",
+		"subscription.cancelled",
+		"subscription.created",
+		"subscription.expired",
+		"subscription.plan.changed",
+		"subscription.renewal.requested",
+		"subscription.updated",
+	}
 }
 
 func getBoolEnvOrDefault(key string, defaultValue bool) bool {

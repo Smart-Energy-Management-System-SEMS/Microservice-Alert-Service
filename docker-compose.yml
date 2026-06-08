@@ -69,7 +69,7 @@ services:
       - .env
     environment:
       KAFKA_BOOTSTRAP_SERVER: kafka:9092
-      KAFKA_TOPICS: ${KAFKA_TOPICS:-energy.consumption.recorded,alert.created}
+      KAFKA_TOPICS: ${KAFKA_TOPICS:-device.registered,device.status.updated,device.linked,device.unlinked,device.configuration.updated,device.event.recorded,energy.consumption.recorded,energy.reading.created,analytics.anomaly.detected,analytics.bill_prediction.generated,analytics.consumption_ranking.generated,analytics.device_identified,analytics.recommendation.generated,payment.failed,payment.processed,payment.method.added,subscription.created,subscription.updated,subscription.cancelled,subscription.expired,subscription.plan.changed,subscription.renewal.requested,invoice.generated,iam.user.registered,iam.user.logged-in,iam.role.assigned,iam.role-assignment.requested,monitoring.alert.created,monitoring.reading.ingest,monitoring.reading.processed,alert.created}
     volumes:
       - ./scripts/create-topics.sh:/scripts/create-topics.sh:ro
     depends_on:
