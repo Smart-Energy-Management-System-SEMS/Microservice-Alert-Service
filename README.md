@@ -164,4 +164,4 @@ az containerapp update \
 - Las migraciones GORM se ejecutan al iniciar.
 - El dominio mantiene independencia de frameworks e infraestructura (DDD).
 - El consumidor Kafka se desactiva automaticamente si faltan brokers o topics.
-- `Alerts` ahora puede suscribirse a multiples topics. Los eventos de energia (`energy.consumption.recorded`, `energy.reading.created`) siguen evaluando thresholds e inactividad; los eventos de Device, Analytics, IAM, Payments, Subscription, Invoice y Monitoring pueden generar alertas/notificaciones de negocio segun el tipo de evento.
+- `Alerts` ahora fuerza el set minimo de topics de su flujo: `energy.reading.created`, `analytics.anomaly.detected` y `energy.consumption.recorded`. Los eventos de energia evaluan thresholds e inactividad; `analytics.anomaly.detected` permite disparar alertas mas inteligentes sin depender solo de reglas directas.

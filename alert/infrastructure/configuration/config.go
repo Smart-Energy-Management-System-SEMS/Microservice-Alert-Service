@@ -76,8 +76,9 @@ func Load() (Config, error) {
 		cfg.KafkaConsumptionTopics = splitCSV(cfg.KafkaConsumptionTopic)
 	}
 	if len(cfg.KafkaConsumptionTopics) == 0 {
-		cfg.KafkaConsumptionTopics = defaultKafkaConsumptionTopics()
+		cfg.KafkaConsumptionTopics = requiredKafkaConsumptionTopics()
 	}
+	cfg.KafkaConsumptionTopics = mergeTopics(cfg.KafkaConsumptionTopics, requiredKafkaConsumptionTopics())
 	if cfg.KafkaConsumptionTopic == "" {
 		cfg.KafkaConsumptionTopic = cfg.KafkaConsumptionTopics[0]
 	}
@@ -164,6 +165,7 @@ func (c *Config) loadFromConfigService() error {
 	if len(c.KafkaConsumptionTopics) == 0 && c.KafkaConsumptionTopic != "" {
 		c.KafkaConsumptionTopics = splitCSV(c.KafkaConsumptionTopic)
 	}
+	c.KafkaConsumptionTopics = mergeTopics(c.KafkaConsumptionTopics, requiredKafkaConsumptionTopics())
 	if len(c.KafkaConsumptionTopics) > 0 && c.KafkaConsumptionTopic == "" {
 		c.KafkaConsumptionTopic = c.KafkaConsumptionTopics[0]
 	}
@@ -418,39 +420,31 @@ func splitCSV(value string) []string {
 	return result
 }
 
-func defaultKafkaConsumptionTopics() []string {
+func requiredKafkaConsumptionTopics() []string {
 	return []string{
-		"analytics.anomaly.detected",
-		"analytics.bill_prediction.generated",
-		"analytics.consumption_ranking.generated",
-		"analytics.device_identified",
-		"analytics.recommendation.generated",
-		"device.configuration.updated",
-		"device.event.recorded",
-		"device.linked",
-		"device.registered",
-		"device.status.updated",
-		"device.unlinked",
-		"energy.consumption.recorded",
 		"energy.reading.created",
-		"iam.role-assignment.requested",
-		"iam.role.assigned",
-		"iam.user.logged-in",
-		"iam.user.registered",
-		"invoice.generated",
-		"monitoring.alert.created",
-		"monitoring.reading.ingest",
-		"monitoring.reading.processed",
-		"payment.failed",
-		"payment.method.added",
-		"payment.processed",
-		"subscription.cancelled",
-		"subscription.created",
-		"subscription.expired",
-		"subscription.plan.changed",
-		"subscription.renewal.requested",
-		"subscription.updated",
+		"analytics.anomaly.detected",
+		"energy.consumption.recorded",
 	}
+}
+
+func mergeTopics(base []string, extras []string) []string {
+	seen := make(map[string]struct{}, len(base)+len(extras))
+	merged := make([]string, 0, len(base)+len(extras))
+
+	for _, topic := range append(base, extras...) {
+		trimmed := strings.TrimSpace(topic)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		merged = append(merged, trimmed)
+	}
+
+	return merged
 }
 
 func getBoolEnvOrDefault(key string, defaultValue bool) bool {
