@@ -100,6 +100,7 @@ func main() {
 	kafkaController := controllers.NewKafkaController(kafkaProducer)
 
 	router := rest.NewRouter(
+		cfg,
 		alertCommandService,
 		alertQueryService,
 		thresholdCommandService,

@@ -17,11 +17,18 @@ import (
 
 type Config struct {
 	ServiceName            string
+	Environment            string
 	ConfigServiceURL       string
 	AutoMigrate            bool
 	ServerPort             string
+	CORSAllowedOrigins     []string
 	DatabaseURL            string
 	KafkaBrokers           []string
+	KafkaSecurityProtocol  string
+	KafkaSASLMechanism     string
+	KafkaUsername          string
+	KafkaPassword          string
+	KafkaClientID          string
 	KafkaConsumerGroup     string
 	KafkaConsumptionTopics []string
 	KafkaConsumptionTopic  string
@@ -42,11 +49,18 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		ServiceName:            getEnvOrDefault("SERVICE_NAME", "alert-service"),
+		Environment:            getFirstEnv([]string{"ENVIRONMENT", "APP_ENV"}, "local"),
 		ConfigServiceURL:       strings.TrimSpace(os.Getenv("CONFIG_SERVICE_URL")),
 		AutoMigrate:            getBoolEnvOrDefault("AUTO_MIGRATE", true),
 		ServerPort:             getFirstEnv([]string{"PORT", "SERVER_PORT"}, ""),
+		CORSAllowedOrigins:     getCSVEnv([]string{"CORS_ALLOWED_ORIGINS", "ALLOWED_ORIGINS"}, ""),
 		DatabaseURL:            os.Getenv("DATABASE_URL"),
 		KafkaBrokers:           splitEnv("KAFKA_BROKERS", ""),
+		KafkaSecurityProtocol:  strings.TrimSpace(os.Getenv("KAFKA_SECURITY_PROTOCOL")),
+		KafkaSASLMechanism:     strings.TrimSpace(os.Getenv("KAFKA_SASL_MECHANISM")),
+		KafkaUsername:          strings.TrimSpace(os.Getenv("KAFKA_USERNAME")),
+		KafkaPassword:          os.Getenv("KAFKA_PASSWORD"),
+		KafkaClientID:          strings.TrimSpace(os.Getenv("KAFKA_CLIENT_ID")),
 		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
 		KafkaConsumptionTopics: getTopicsFromEnv(),
 		KafkaConsumptionTopic:  getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
@@ -68,6 +82,9 @@ func Load() (Config, error) {
 	if cfg.ServerPort == "" {
 		cfg.ServerPort = "8080"
 	}
+	if len(cfg.CORSAllowedOrigins) == 0 {
+		cfg.CORSAllowedOrigins = splitCSV("http://localhost:3000,http://localhost:5173")
+	}
 
 	if cfg.KafkaConsumerGroup == "" {
 		cfg.KafkaConsumerGroup = "alert-service-group"
@@ -88,7 +105,7 @@ func Load() (Config, error) {
 	if len(cfg.KafkaBrokers) == 0 {
 		cfg.KafkaBrokers = splitCSV("localhost:9092")
 	}
-	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers)
+	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers, cfg.Environment)
 	if cfg.MailHost == "" {
 		cfg.MailHost = "smtp.gmail.com"
 	}
@@ -140,6 +157,15 @@ func (c *Config) loadFromConfigService() error {
 
 	if c.ServerPort == "" {
 		c.ServerPort = getString(serviceData, "serverPort", "server_port", "port")
+	}
+	if len(c.CORSAllowedOrigins) == 0 {
+		c.CORSAllowedOrigins = getStringSlice(
+			serviceData,
+			"corsAllowedOrigins",
+			"cors_allowed_origins",
+			"allowedOrigins",
+			"allowed_origins",
+		)
 	}
 	if c.KafkaConsumerGroup == "" {
 		c.KafkaConsumerGroup = getString(serviceData, "kafkaConsumerGroup", "kafka_consumer_group", "consumerGroup", "groupId")
@@ -315,8 +341,8 @@ func firstBrokers(maps ...map[string]any) []string {
 	return []string{}
 }
 
-func normalizeKafkaBrokersForRuntime(brokers []string) []string {
-	if len(brokers) == 0 || isRunningInContainer() {
+func normalizeKafkaBrokersForRuntime(brokers []string, environment string) []string {
+	if len(brokers) == 0 || isRunningInContainer() || !shouldRewriteKafkaHosts(environment) {
 		return brokers
 	}
 
@@ -326,6 +352,17 @@ func normalizeKafkaBrokersForRuntime(brokers []string) []string {
 		normalized = append(normalized, rewriteKafkaHostToLocalhost(trimmed))
 	}
 	return normalized
+}
+
+func shouldRewriteKafkaHosts(environment string) bool {
+	switch strings.ToLower(strings.TrimSpace(environment)) {
+	case "", "local", "development", "dev":
+		return true
+	case "azure", "production", "prod", "staging", "qa", "test":
+		return false
+	default:
+		return false
+	}
 }
 
 func rewriteKafkaHostToLocalhost(broker string) string {
@@ -382,6 +419,17 @@ func getFirstEnv(keys []string, defaultValue string) string {
 	}
 
 	return defaultValue
+}
+
+func getCSVEnv(keys []string, defaultValue string) []string {
+	for _, key := range keys {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value != "" {
+			return splitCSV(value)
+		}
+	}
+
+	return splitCSV(defaultValue)
 }
 
 func splitEnv(key string, defaultValue string) []string {

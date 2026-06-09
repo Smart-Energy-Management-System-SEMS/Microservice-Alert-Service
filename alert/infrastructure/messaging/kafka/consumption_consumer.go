@@ -27,11 +27,17 @@ type readerBinding struct {
 }
 
 func NewConsumptionConsumer(cfg configuration.Config, handler TopicMessageHandler, logger *log.Logger) *ConsumptionConsumer {
-	brokers := normalizeKafkaHosts(cfg.KafkaBrokers)
+	brokers := normalizeKafkaHosts(cfg)
 	topics := normalizeTopics(cfg.KafkaConsumptionTopics, cfg.KafkaConsumptionTopic)
 	logger.Printf("consumer brokers effective: %v", brokers)
 	logger.Printf("consumer topics effective: %v", topics)
 	if len(brokers) == 0 || len(topics) == 0 || handler == nil {
+		return &ConsumptionConsumer{enabled: false}
+	}
+
+	dialer, err := buildDialer(cfg)
+	if err != nil {
+		logger.Printf("consumer kafka dialer config error: %v", err)
 		return &ConsumptionConsumer{enabled: false}
 	}
 
@@ -43,6 +49,7 @@ func NewConsumptionConsumer(cfg configuration.Config, handler TopicMessageHandle
 				Brokers: brokers,
 				Topic:   topic,
 				GroupID: cfg.KafkaConsumerGroup,
+				Dialer:  dialer,
 			}),
 		})
 	}
@@ -52,26 +59,6 @@ func NewConsumptionConsumer(cfg configuration.Config, handler TopicMessageHandle
 		logger:  logger,
 		enabled: true,
 	}
-}
-
-func normalizeKafkaHosts(brokers []string) []string {
-	out := make([]string, 0, len(brokers))
-	for _, b := range brokers {
-		t := strings.TrimSpace(b)
-		if t == "" {
-			continue
-		}
-		if strings.HasPrefix(strings.ToLower(t), "kafka:") {
-			out = append(out, "localhost:"+strings.TrimPrefix(t, "kafka:"))
-			continue
-		}
-		if strings.EqualFold(t, "localhost:29092") || strings.EqualFold(t, "127.0.0.1:29092") {
-			out = append(out, "localhost:9092")
-			continue
-		}
-		out = append(out, t)
-	}
-	return out
 }
 
 func normalizeTopics(topics []string, legacyTopic string) []string {

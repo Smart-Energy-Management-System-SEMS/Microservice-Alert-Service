@@ -8,10 +8,12 @@ import (
 
 	"microservice-alert-service/alert/application/commandservices"
 	"microservice-alert-service/alert/application/queryservices"
+	"microservice-alert-service/alert/infrastructure/configuration"
 	"microservice-alert-service/alert/interfaces/rest/controllers"
 )
 
 func NewRouter(
+	cfg configuration.Config,
 	alertCommand *commandservices.AlertCommandService,
 	alertQuery *queryservices.AlertQueryService,
 	thresholdCommand *commandservices.ThresholdCommandService,
@@ -26,10 +28,7 @@ func NewRouter(
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
 	router.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:3000",
-			"http://localhost:5173",
-		},
+		AllowOrigins: cfg.CORSAllowedOrigins,
 		AllowMethods: []string{
 			http.MethodGet,
 			http.MethodPost,
