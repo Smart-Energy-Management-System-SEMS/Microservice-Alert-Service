@@ -7,7 +7,7 @@ type CreateThresholdRequest struct {
 	Metric         string  `json:"metric" binding:"required"`
 	Operator       string  `json:"operator" binding:"required"`
 	ThresholdValue float64 `json:"threshold_value" binding:"required"`
-	Active         bool    `json:"active"`
+	Active         *bool   `json:"active"`
 }
 
 type ThresholdResponse struct {

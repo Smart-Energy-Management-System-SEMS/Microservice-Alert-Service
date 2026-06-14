@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +18,7 @@ type Config struct {
 	Environment            string
 	ConfigServiceURL       string
 	AutoMigrate            bool
+	KafkaEnabled           bool
 	ServerPort             string
 	CORSAllowedOrigins     []string
 	DatabaseURL            string
@@ -52,6 +51,7 @@ func Load() (Config, error) {
 		Environment:            getFirstEnv([]string{"ENVIRONMENT", "APP_ENV"}, "local"),
 		ConfigServiceURL:       strings.TrimSpace(os.Getenv("CONFIG_SERVICE_URL")),
 		AutoMigrate:            getBoolEnvOrDefault("AUTO_MIGRATE", true),
+		KafkaEnabled:           getBoolEnvOrDefault("KAFKA_ENABLED", true),
 		ServerPort:             getFirstEnv([]string{"PORT", "SERVER_PORT"}, ""),
 		CORSAllowedOrigins:     getCSVEnv([]string{"CORS_ALLOWED_ORIGINS", "ALLOWED_ORIGINS"}, ""),
 		DatabaseURL:            os.Getenv("DATABASE_URL"),
@@ -64,7 +64,7 @@ func Load() (Config, error) {
 		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
 		KafkaConsumptionTopics: getTopicsFromEnv(),
 		KafkaConsumptionTopic:  getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
-		KafkaAlertCreatedTopic: getEnvOrDefault("KAFKA_TOPIC_ALERT_CREATED", ""),
+		KafkaAlertCreatedTopic: getFirstEnv([]string{"KAFKA_ALERTS_TOPIC", "KAFKA_TOPIC_ALERT_CREATED"}, ""),
 		TwilioAccountSID:       os.Getenv("TWILIO_ACCOUNT_SID"),
 		TwilioAPIKey:           os.Getenv("TWILIO_API_KEY"),
 		TwilioAPISecret:        os.Getenv("TWILIO_API_SECRET"),
@@ -92,19 +92,9 @@ func Load() (Config, error) {
 	if len(cfg.KafkaConsumptionTopics) == 0 && cfg.KafkaConsumptionTopic != "" {
 		cfg.KafkaConsumptionTopics = splitCSV(cfg.KafkaConsumptionTopic)
 	}
-	if len(cfg.KafkaConsumptionTopics) == 0 {
-		cfg.KafkaConsumptionTopics = requiredKafkaConsumptionTopics()
-	}
-	cfg.KafkaConsumptionTopics = mergeTopics(cfg.KafkaConsumptionTopics, requiredKafkaConsumptionTopics())
-	if cfg.KafkaConsumptionTopic == "" {
-		cfg.KafkaConsumptionTopic = cfg.KafkaConsumptionTopics[0]
-	}
-	if cfg.KafkaAlertCreatedTopic == "" {
-		cfg.KafkaAlertCreatedTopic = "alert.created"
-	}
-	if len(cfg.KafkaBrokers) == 0 {
-		cfg.KafkaBrokers = splitCSV("localhost:9092")
-	}
+	cfg.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(cfg.KafkaConsumptionTopics, cfg.KafkaConsumptionTopic)
+	cfg.KafkaConsumptionTopic = primaryKafkaConsumptionTopic(cfg.KafkaConsumptionTopics)
+	cfg.KafkaAlertCreatedTopic = normalizeKafkaAlertTopic(cfg.KafkaAlertCreatedTopic)
 	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers, cfg.Environment)
 	if cfg.MailHost == "" {
 		cfg.MailHost = "smtp.gmail.com"
@@ -177,7 +167,15 @@ func (c *Config) loadFromConfigService() error {
 		c.KafkaConsumptionTopic = getString(serviceData, "kafkaConsumptionTopic", "kafka_consumption_topic", "consumptionTopic", "topic")
 	}
 	if c.KafkaAlertCreatedTopic == "" {
-		c.KafkaAlertCreatedTopic = getString(serviceData, "kafkaAlertCreatedTopic", "kafka_alert_created_topic", "alertCreatedTopic")
+		c.KafkaAlertCreatedTopic = getString(
+			serviceData,
+			"kafkaAlertsTopic",
+			"kafka_alerts_topic",
+			"alertsTopic",
+			"kafkaAlertCreatedTopic",
+			"kafka_alert_created_topic",
+			"alertCreatedTopic",
+		)
 	}
 	if len(c.KafkaBrokers) == 0 {
 		c.KafkaBrokers = firstBrokers(serviceData, kafkaData)
@@ -191,10 +189,9 @@ func (c *Config) loadFromConfigService() error {
 	if len(c.KafkaConsumptionTopics) == 0 && c.KafkaConsumptionTopic != "" {
 		c.KafkaConsumptionTopics = splitCSV(c.KafkaConsumptionTopic)
 	}
-	c.KafkaConsumptionTopics = mergeTopics(c.KafkaConsumptionTopics, requiredKafkaConsumptionTopics())
-	if len(c.KafkaConsumptionTopics) > 0 && c.KafkaConsumptionTopic == "" {
-		c.KafkaConsumptionTopic = c.KafkaConsumptionTopics[0]
-	}
+	c.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(c.KafkaConsumptionTopics, c.KafkaConsumptionTopic)
+	c.KafkaConsumptionTopic = primaryKafkaConsumptionTopic(c.KafkaConsumptionTopics)
+	c.KafkaAlertCreatedTopic = normalizeKafkaAlertTopic(c.KafkaAlertCreatedTopic)
 
 	return nil
 }
@@ -342,63 +339,22 @@ func firstBrokers(maps ...map[string]any) []string {
 }
 
 func normalizeKafkaBrokersForRuntime(brokers []string, environment string) []string {
-	if len(brokers) == 0 || isRunningInContainer() || !shouldRewriteKafkaHosts(environment) {
-		return brokers
-	}
+	_ = environment
 
 	normalized := make([]string, 0, len(brokers))
+	seen := make(map[string]struct{}, len(brokers))
 	for _, broker := range brokers {
 		trimmed := strings.TrimSpace(broker)
-		normalized = append(normalized, rewriteKafkaHostToLocalhost(trimmed))
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
 	}
 	return normalized
-}
-
-func shouldRewriteKafkaHosts(environment string) bool {
-	switch strings.ToLower(strings.TrimSpace(environment)) {
-	case "", "local", "development", "dev":
-		return true
-	case "azure", "production", "prod", "staging", "qa", "test":
-		return false
-	default:
-		return false
-	}
-}
-
-func rewriteKafkaHostToLocalhost(broker string) string {
-	if broker == "" {
-		return broker
-	}
-
-	// Plain host:port form
-	parts := strings.Split(broker, ":")
-	if len(parts) == 2 && strings.EqualFold(strings.TrimSpace(parts[0]), "kafka") {
-		return "localhost:" + strings.TrimSpace(parts[1])
-	}
-	if len(parts) == 2 && (strings.EqualFold(strings.TrimSpace(parts[0]), "localhost") || strings.EqualFold(strings.TrimSpace(parts[0]), "127.0.0.1")) && strings.TrimSpace(parts[1]) == "29092" {
-		return "localhost:9092"
-	}
-
-	// URL-like form, e.g. PLAINTEXT://kafka:29092
-	if strings.Contains(broker, "://") {
-		parsed, err := url.Parse(broker)
-		if err == nil && strings.EqualFold(parsed.Hostname(), "kafka") {
-			port := parsed.Port()
-			if port != "" {
-				parsed.Host = "localhost:" + port
-			} else {
-				parsed.Host = "localhost"
-			}
-			return parsed.String()
-		}
-	}
-
-	return broker
-}
-
-func isRunningInContainer() bool {
-	_, err := os.Stat(filepath.Clean("/.dockerenv"))
-	return err == nil
 }
 
 func getEnvOrDefault(key string, defaultValue string) string {
@@ -470,9 +426,67 @@ func splitCSV(value string) []string {
 
 func requiredKafkaConsumptionTopics() []string {
 	return []string{
-		"energy.reading.created",
-		"analytics.anomaly.detected",
-		"energy.consumption.recorded",
+		"energy.events",
+		"analytics.events",
+	}
+}
+
+func normalizeKafkaConsumptionTopics(topics []string, legacyTopic string) []string {
+	normalized := make([]string, 0, len(topics)+1)
+	seen := make(map[string]struct{}, len(topics)+1)
+
+	for _, topic := range append(topics, legacyTopic) {
+		mapped, ok := mapToGroupedKafkaTopic(topic)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[mapped]; exists {
+			continue
+		}
+		seen[mapped] = struct{}{}
+		normalized = append(normalized, mapped)
+	}
+
+	if len(normalized) == 0 {
+		return requiredKafkaConsumptionTopics()
+	}
+
+	return mergeTopics(normalized, requiredKafkaConsumptionTopics())
+}
+
+func primaryKafkaConsumptionTopic(topics []string) string {
+	if len(topics) == 0 {
+		return "energy.events"
+	}
+	return topics[0]
+}
+
+func normalizeKafkaAlertTopic(topic string) string {
+	mapped, ok := mapToGroupedKafkaTopic(topic)
+	if ok && mapped == "alerts.events" {
+		return mapped
+	}
+	if strings.TrimSpace(topic) == "" {
+		return "alerts.events"
+	}
+	if strings.EqualFold(strings.TrimSpace(topic), "alert.created") {
+		return "alerts.events"
+	}
+	return strings.TrimSpace(topic)
+}
+
+func mapToGroupedKafkaTopic(topic string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(topic)) {
+	case "":
+		return "", false
+	case "energy.events", "energy.consumption.recorded", "energy.reading.created":
+		return "energy.events", true
+	case "analytics.events", "analytics.anomaly.detected", "analytics.recommendation.generated":
+		return "analytics.events", true
+	case "alerts.events", "alert.created", "monitoring.alert.created":
+		return "alerts.events", true
+	default:
+		return strings.TrimSpace(topic), false
 	}
 }
 

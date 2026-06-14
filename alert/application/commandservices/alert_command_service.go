@@ -20,10 +20,10 @@ import (
 // their status. It depends on abstractions (repository and notifier) so it
 // stays decoupled from concrete infrastructure (Dependency Inversion).
 type AlertCommandService struct {
-	repo     outboundservices.AlertRepository
+	repo      outboundservices.AlertRepository
 	publisher outboundservices.AlertEventPublisher
-	notifier *NotificationService
-	logger   *log.Logger
+	notifier  *NotificationService
+	logger    *log.Logger
 }
 
 // NewAlertCommandService is the constructor; it wires the injected dependencies.
@@ -98,8 +98,7 @@ func (s *AlertCommandService) UpdateAlertStatus(ctx context.Context, cmd command
 }
 
 func buildAlertCreatedEvent(alert *entities.Alert) map[string]any {
-	event := map[string]any{
-		"event":        "alert.created",
+	data := map[string]any{
 		"alert_id":     alert.AlertID.String(),
 		"user_id":      alert.UserID.String(),
 		"device_id":    alert.DeviceID.String(),
@@ -112,15 +111,27 @@ func buildAlertCreatedEvent(alert *entities.Alert) map[string]any {
 	}
 
 	if alert.ThresholdID != nil {
-		event["threshold_id"] = alert.ThresholdID.String()
+		data["threshold_id"] = alert.ThresholdID.String()
 	}
 
 	if alert.InactivityRuleID != nil {
-		event["inactivity_rule_id"] = alert.InactivityRuleID.String()
+		data["inactivity_rule_id"] = alert.InactivityRuleID.String()
 	}
 
 	if alert.ResolvedAt != nil {
-		event["resolved_at"] = alert.ResolvedAt
+		data["resolved_at"] = alert.ResolvedAt
+	}
+
+	event := map[string]any{
+		"eventType":  "alert.created",
+		"event":      "alert.created",
+		"source":     "alert-service",
+		"occurredAt": alert.TriggeredAt.UTC().Format(time.RFC3339),
+		"data":       data,
+	}
+
+	for key, value := range data {
+		event[key] = value
 	}
 
 	return event

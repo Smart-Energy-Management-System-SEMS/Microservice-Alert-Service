@@ -17,24 +17,17 @@ func normalizeKafkaHosts(cfg configuration.Config) []string {
 		return nil
 	}
 
-	if !shouldRewriteKafkaHosts(cfg.Environment) {
-		return append([]string(nil), cfg.KafkaBrokers...)
-	}
-
 	out := make([]string, 0, len(cfg.KafkaBrokers))
+	seen := make(map[string]struct{}, len(cfg.KafkaBrokers))
 	for _, b := range cfg.KafkaBrokers {
 		t := strings.TrimSpace(b)
 		if t == "" {
 			continue
 		}
-		if strings.HasPrefix(strings.ToLower(t), "kafka:") {
-			out = append(out, "localhost:"+strings.TrimPrefix(t, "kafka:"))
+		if _, exists := seen[t]; exists {
 			continue
 		}
-		if strings.EqualFold(t, "localhost:29092") || strings.EqualFold(t, "127.0.0.1:29092") {
-			out = append(out, "localhost:9092")
-			continue
-		}
+		seen[t] = struct{}{}
 		out = append(out, t)
 	}
 
@@ -78,14 +71,5 @@ func buildSASLMechanism(cfg configuration.Config) (sasl.Mechanism, error) {
 		return scram.Mechanism(scram.SHA512, cfg.KafkaUsername, cfg.KafkaPassword)
 	default:
 		return nil, nil
-	}
-}
-
-func shouldRewriteKafkaHosts(environment string) bool {
-	switch strings.ToLower(strings.TrimSpace(environment)) {
-	case "", "local", "development", "dev":
-		return true
-	default:
-		return false
 	}
 }

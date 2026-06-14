@@ -38,10 +38,13 @@ func (c *KafkaController) PublishTestEvent(ctx *gin.Context) {
 
 	if len(payload) == 0 {
 		payload = map[string]any{
+			"eventType":  "alert.created",
 			"event":      "alert.created",
 			"source":     "alert-service",
 			"occurredAt": time.Now().UTC().Format(time.RFC3339),
-			"message":    "test event from alert-service",
+			"data": map[string]any{
+				"message": "test event from alert-service",
+			},
 		}
 	}
 

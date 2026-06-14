@@ -12,7 +12,7 @@ Este servicio ahora prioriza configuracion desde un Config Service usando:
 
 Variable principal:
 
-- `CONFIG_SERVICE_URL` (local: `http://localhost:8090`)
+- `CONFIG_SERVICE_URL` (ej. URL interna del Config Service)
 
 Si el Config Service no devuelve valores, el servicio usa fallback local seguro para no romper compatibilidad.
 
@@ -25,8 +25,10 @@ Mantener en `.env` solo variables sensibles o propias del despliegue:
 - `SERVICE_NAME`
 - `CONFIG_SERVICE_URL`
 - `DATABASE_URL`
+- `KAFKA_ENABLED`
 - `KAFKA_BROKERS`
 - `KAFKA_CONSUMPTION_TOPICS`
+- `KAFKA_ALERTS_TOPIC`
 - `KAFKA_SECURITY_PROTOCOL`
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`
@@ -43,10 +45,12 @@ Mantener en `.env` solo variables sensibles o propias del despliegue:
 
 Opcional para desarrollo local sin Config Service:
 
-- `KAFKA_BROKERS` (ej. `localhost:9092`)
+- `KAFKA_ENABLED` (`true` para consumir/publicar; `false` para levantar solo HTTP)
+- `KAFKA_BROKERS` (ej. `kafka:9092` en Docker local o Event Hubs en Azure)
 - `KAFKA_CONSUMER_GROUP`
 - `KAFKA_CONSUMPTION_TOPICS`
 - `KAFKA_CONSUMPTION_TOPIC`
+- `KAFKA_ALERTS_TOPIC`
 - `KAFKA_TOPICS` (topics a autocrear en Docker, separados por comas)
 - `MAIL_HOST`
 
@@ -70,7 +74,7 @@ Opcional para desarrollo local sin Config Service:
 
 1. Copia `.env.example` a `.env`.
 2. Define credenciales reales (DB, Twilio, correo).
-3. Si no tienes Config Service local, define tambien `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPICS`. `KAFKA_CONSUMPTION_TOPIC` sigue disponible como fallback legacy de un solo topic.
+3. Si no tienes Config Service, define tambien `KAFKA_ENABLED`, `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPICS`. `KAFKA_CONSUMPTION_TOPIC` sigue disponible como fallback legacy de un solo topic.
 4. Ejecuta:
 
 ```bash
@@ -78,9 +82,11 @@ go mod tidy
 go run main.go
 ```
 
-Compatibilidad local Kafka:
+Topics agrupados usados por este microservicio:
 
-- `KAFKA_BROKERS=localhost:9092`
+- Consume `energy.events`
+- Consume `analytics.events`
+- Publica `alerts.events` con `eventType=alert.created`
 
 ## Docker Compose local
 
@@ -112,8 +118,8 @@ Run (ejemplo local):
 docker run --rm -p 8080:8080 ^
   -e PORT=8080 ^
   -e GIN_MODE=release ^
-  -e CONFIG_SERVICE_URL=http://host.docker.internal:8090 ^
-  -e KAFKA_BROKERS=host.docker.internal:9092 ^
+  -e CONFIG_SERVICE_URL=https://config-service.internal ^
+  -e KAFKA_BROKERS=kafka:9092 ^
   -e DATABASE_URL="postgres://USER:PASSWORD@HOST:5432/DB_NAME?sslmode=disable" ^
   sems-alert-service:latest
 ```
@@ -126,7 +132,10 @@ Para Azure Container Apps, configurar variables de entorno (sin localhost):
 - `SERVICE_NAME=alert-service`
 - `GIN_MODE=release`
 - `CONFIG_SERVICE_URL` (URL interna/privada del Config Service)
+- `KAFKA_ENABLED=true`
 - `KAFKA_BROKERS` (broker privado, ej. `broker:9092`)
+- `KAFKA_CONSUMPTION_TOPICS=energy.events,analytics.events`
+- `KAFKA_ALERTS_TOPIC=alerts.events`
 - `KAFKA_SECURITY_PROTOCOL`
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`
@@ -142,6 +151,8 @@ az containerapp update \
   --set-env-vars PORT=8080 GIN_MODE=release SERVICE_NAME=alert-service \
   --set-env-vars CONFIG_SERVICE_URL=https://<config-service-interno> \
   --set-env-vars KAFKA_BROKERS=<broker-privado>:9092 \
+  --set-env-vars KAFKA_CONSUMPTION_TOPICS=energy.events,analytics.events \
+  --set-env-vars KAFKA_ALERTS_TOPIC=alerts.events \
   --set-env-vars KAFKA_SECURITY_PROTOCOL=SASL_SSL \
   --set-env-vars KAFKA_SASL_MECHANISM=PLAIN \
   --set-env-vars KAFKA_USERNAME=<kafka-username> \
@@ -164,4 +175,6 @@ az containerapp update \
 - Las migraciones GORM se ejecutan al iniciar.
 - El dominio mantiene independencia de frameworks e infraestructura (DDD).
 - El consumidor Kafka se desactiva automaticamente si faltan brokers o topics.
-- `Alerts` ahora fuerza el set minimo de topics de su flujo: `energy.reading.created`, `analytics.anomaly.detected` y `energy.consumption.recorded`. Los eventos de energia evaluan thresholds e inactividad; `analytics.anomaly.detected` permite disparar alertas mas inteligentes sin depender solo de reglas directas.
+- `Alerts` ahora fuerza el set minimo de topics de su flujo: `energy.events` y `analytics.events`.
+- Dentro de esos topics agrupados, el micro detecta por `eventType` al menos `energy.consumption.recorded`, `analytics.anomaly.detected` y `analytics.recommendation.generated`.
+- Cuando genera una alerta, publica en `alerts.events` usando `eventType=alert.created`.

@@ -12,6 +12,7 @@ services:
       SERVER_PORT: ${PORT:-8080}
       CONFIG_SERVICE_URL: ${CONFIG_SERVICE_URL:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-alert_service}?sslmode=disable
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
       KAFKA_BROKERS: ${KAFKA_BROKERS_CONTAINER:-kafka:9092}
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
@@ -54,11 +55,11 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
     restart: unless-stopped
 
@@ -69,7 +70,7 @@ services:
       - .env
     environment:
       KAFKA_BOOTSTRAP_SERVER: kafka:9092
-      KAFKA_TOPICS: ${KAFKA_TOPICS:-device.registered,device.status.updated,device.linked,device.unlinked,device.configuration.updated,device.event.recorded,energy.consumption.recorded,energy.reading.created,analytics.anomaly.detected,analytics.bill_prediction.generated,analytics.consumption_ranking.generated,analytics.device_identified,analytics.recommendation.generated,payment.failed,payment.processed,payment.method.added,subscription.created,subscription.updated,subscription.cancelled,subscription.expired,subscription.plan.changed,subscription.renewal.requested,invoice.generated,iam.user.registered,iam.user.logged-in,iam.role.assigned,iam.role-assignment.requested,monitoring.alert.created,monitoring.reading.ingest,monitoring.reading.processed,alert.created}
+      KAFKA_TOPICS: ${KAFKA_TOPICS:-energy.events,analytics.events,alerts.events}
     volumes:
       - ./scripts/create-topics.sh:/scripts/create-topics.sh:ro
     depends_on:

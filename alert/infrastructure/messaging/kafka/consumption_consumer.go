@@ -31,6 +31,10 @@ func NewConsumptionConsumer(cfg configuration.Config, handler TopicMessageHandle
 	topics := normalizeTopics(cfg.KafkaConsumptionTopics, cfg.KafkaConsumptionTopic)
 	logger.Printf("consumer brokers effective: %v", brokers)
 	logger.Printf("consumer topics effective: %v", topics)
+	if !cfg.KafkaEnabled {
+		logger.Printf("consumer disabled by KAFKA_ENABLED=false")
+		return &ConsumptionConsumer{enabled: false}
+	}
 	if len(brokers) == 0 || len(topics) == 0 || handler == nil {
 		return &ConsumptionConsumer{enabled: false}
 	}
@@ -95,7 +99,7 @@ func (c *ConsumptionConsumer) Start(ctx context.Context, handler TopicMessageHan
 			defer wg.Done()
 			defer binding.reader.Close()
 			for {
-				msg, err := binding.reader.ReadMessage(ctx)
+				msg, err := binding.reader.FetchMessage(ctx)
 				if err != nil {
 					if ctx.Err() != nil {
 						return
@@ -106,6 +110,11 @@ func (c *ConsumptionConsumer) Start(ctx context.Context, handler TopicMessageHan
 
 				if err := handler.HandleMessage(ctx, binding.topic, msg.Value); err != nil {
 					c.logger.Printf("kafka handler error topic=%s: %v", binding.topic, err)
+					continue
+				}
+
+				if err := binding.reader.CommitMessages(ctx, msg); err != nil {
+					c.logger.Printf("kafka commit error topic=%s: %v", binding.topic, err)
 				}
 			}
 		}(binding)

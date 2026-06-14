@@ -21,6 +21,10 @@ func NewAlertEventProducer(cfg configuration.Config, logger *log.Logger) *AlertE
 	topic := cfg.KafkaAlertCreatedTopic
 	brokers := normalizeKafkaHosts(cfg)
 	logger.Printf("producer brokers effective: %v", brokers)
+	if !cfg.KafkaEnabled {
+		logger.Printf("producer disabled by KAFKA_ENABLED=false")
+		return &AlertEventProducer{enabled: false}
+	}
 	if len(brokers) == 0 || topic == "" {
 		return &AlertEventProducer{enabled: false}
 	}
