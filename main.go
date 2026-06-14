@@ -35,6 +35,7 @@ func main() {
 	logger.Printf("kafka enabled: %t", cfg.KafkaEnabled)
 	logger.Printf("kafka consumption topics: %v | group: %s", cfg.KafkaConsumptionTopics, cfg.KafkaConsumerGroup)
 	logger.Printf("kafka alert publish topic: %s", cfg.KafkaAlertCreatedTopic)
+	logger.Printf("alert default status: %s", cfg.AlertDefaultStatus)
 
 	db, err := gormconfig.NewDatabase(cfg.DatabaseURL)
 	if err != nil {
@@ -82,7 +83,7 @@ func main() {
 	)
 
 	kafkaProducer := kafka.NewAlertEventProducer(cfg, logger)
-	alertCommandService := commandservices.NewAlertCommandService(alertRepo, kafkaProducer, notificationService, logger)
+	alertCommandService := commandservices.NewAlertCommandService(alertRepo, kafkaProducer, notificationService, cfg.AlertDefaultStatus, logger)
 	thresholdCommandService := commandservices.NewThresholdCommandService(thresholdRepo, logger)
 	inactivityCommandService := commandservices.NewInactivityRuleCommandService(inactivityRepo, logger)
 	preferenceCommandService := commandservices.NewNotificationPreferenceCommandService(preferenceRepo, logger)

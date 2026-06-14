@@ -29,6 +29,7 @@ Mantener en `.env` solo variables sensibles o propias del despliegue:
 - `KAFKA_BROKERS`
 - `KAFKA_CONSUMPTION_TOPICS`
 - `KAFKA_ALERTS_TOPIC`
+- `ALERT_DEFAULT_STATUS`
 - `KAFKA_SECURITY_PROTOCOL`
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`
@@ -51,6 +52,7 @@ Opcional para desarrollo local sin Config Service:
 - `KAFKA_CONSUMPTION_TOPICS`
 - `KAFKA_CONSUMPTION_TOPIC`
 - `KAFKA_ALERTS_TOPIC`
+- `ALERT_DEFAULT_STATUS` (por defecto `pending`; el micro normaliza `open` -> `pending`)
 - `KAFKA_TOPICS` (topics a autocrear en Docker, separados por comas)
 - `MAIL_HOST`
 
@@ -136,6 +138,7 @@ Para Azure Container Apps, configurar variables de entorno (sin localhost):
 - `KAFKA_BROKERS` (broker privado, ej. `broker:9092`)
 - `KAFKA_CONSUMPTION_TOPICS=energy.events,analytics.events`
 - `KAFKA_ALERTS_TOPIC=alerts.events`
+- `ALERT_DEFAULT_STATUS=pending`
 - `KAFKA_SECURITY_PROTOCOL`
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`

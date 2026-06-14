@@ -7,6 +7,7 @@ package commandservices
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,10 +21,11 @@ import (
 // their status. It depends on abstractions (repository and notifier) so it
 // stays decoupled from concrete infrastructure (Dependency Inversion).
 type AlertCommandService struct {
-	repo      outboundservices.AlertRepository
-	publisher outboundservices.AlertEventPublisher
-	notifier  *NotificationService
-	logger    *log.Logger
+	repo          outboundservices.AlertRepository
+	publisher     outboundservices.AlertEventPublisher
+	notifier      *NotificationService
+	defaultStatus string
+	logger        *log.Logger
 }
 
 // NewAlertCommandService is the constructor; it wires the injected dependencies.
@@ -31,9 +33,16 @@ func NewAlertCommandService(
 	repo outboundservices.AlertRepository,
 	publisher outboundservices.AlertEventPublisher,
 	notifier *NotificationService,
+	defaultStatus string,
 	logger *log.Logger,
 ) *AlertCommandService {
-	return &AlertCommandService{repo: repo, publisher: publisher, notifier: notifier, logger: logger}
+	return &AlertCommandService{
+		repo:          repo,
+		publisher:     publisher,
+		notifier:      notifier,
+		defaultStatus: normalizeAlertStatus(defaultStatus, "pending"),
+		logger:        logger,
+	}
 }
 
 // CreateAlert builds an Alert entity from the command and persists it.
@@ -49,7 +58,7 @@ func (s *AlertCommandService) CreateAlert(ctx context.Context, cmd commands.Crea
 		Title:            cmd.Title,
 		Message:          cmd.Message,
 		Severity:         cmd.Severity,
-		Status:           cmd.Status,
+		Status:           normalizeAlertStatus(cmd.Status, s.defaultStatus),
 		TriggeredAt:      cmd.TriggeredAt,
 	}
 
@@ -94,7 +103,22 @@ func (s *AlertCommandService) CreateAlertAndNotify(ctx context.Context, cmd comm
 
 // UpdateAlertStatus changes the status of an existing alert (e.g. resolved).
 func (s *AlertCommandService) UpdateAlertStatus(ctx context.Context, cmd commands.UpdateAlertStatusCommand) error {
-	return s.repo.UpdateStatus(ctx, cmd.AlertID, cmd.Status, cmd.ResolvedAt)
+	return s.repo.UpdateStatus(ctx, cmd.AlertID, normalizeAlertStatus(cmd.Status, s.defaultStatus), cmd.ResolvedAt)
+}
+
+func normalizeAlertStatus(value string, fallback string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "open":
+		return "pending"
+	case "closed":
+		return "resolved"
+	case "pending", "active", "resolved", "dismissed", "acknowledged":
+		return strings.ToLower(strings.TrimSpace(value))
+	case "":
+		return strings.ToLower(strings.TrimSpace(fallback))
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
 }
 
 func buildAlertCreatedEvent(alert *entities.Alert) map[string]any {

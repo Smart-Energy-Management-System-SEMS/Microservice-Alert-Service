@@ -32,6 +32,7 @@ type Config struct {
 	KafkaConsumptionTopics []string
 	KafkaConsumptionTopic  string
 	KafkaAlertCreatedTopic string
+	AlertDefaultStatus     string
 	TwilioAccountSID       string
 	TwilioAPIKey           string
 	TwilioAPISecret        string
@@ -65,6 +66,7 @@ func Load() (Config, error) {
 		KafkaConsumptionTopics: getTopicsFromEnv(),
 		KafkaConsumptionTopic:  getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
 		KafkaAlertCreatedTopic: getFirstEnv([]string{"KAFKA_ALERTS_TOPIC", "KAFKA_TOPIC_ALERT_CREATED"}, ""),
+		AlertDefaultStatus:     getFirstEnv([]string{"ALERT_DEFAULT_STATUS"}, "pending"),
 		TwilioAccountSID:       os.Getenv("TWILIO_ACCOUNT_SID"),
 		TwilioAPIKey:           os.Getenv("TWILIO_API_KEY"),
 		TwilioAPISecret:        os.Getenv("TWILIO_API_SECRET"),
@@ -96,6 +98,7 @@ func Load() (Config, error) {
 	cfg.KafkaConsumptionTopic = primaryKafkaConsumptionTopic(cfg.KafkaConsumptionTopics)
 	cfg.KafkaAlertCreatedTopic = normalizeKafkaAlertTopic(cfg.KafkaAlertCreatedTopic)
 	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers, cfg.Environment)
+	cfg.AlertDefaultStatus = normalizeAlertStatus(cfg.AlertDefaultStatus, "pending")
 	if cfg.MailHost == "" {
 		cfg.MailHost = "smtp.gmail.com"
 	}
@@ -192,6 +195,7 @@ func (c *Config) loadFromConfigService() error {
 	c.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(c.KafkaConsumptionTopics, c.KafkaConsumptionTopic)
 	c.KafkaConsumptionTopic = primaryKafkaConsumptionTopic(c.KafkaConsumptionTopics)
 	c.KafkaAlertCreatedTopic = normalizeKafkaAlertTopic(c.KafkaAlertCreatedTopic)
+	c.AlertDefaultStatus = normalizeAlertStatus(c.AlertDefaultStatus, "pending")
 
 	return nil
 }
@@ -521,4 +525,19 @@ func getBoolEnvOrDefault(key string, defaultValue bool) bool {
 	}
 
 	return parsed
+}
+
+func normalizeAlertStatus(value string, fallback string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "open":
+		return "pending"
+	case "closed":
+		return "resolved"
+	case "pending", "active", "resolved", "dismissed", "acknowledged":
+		return strings.ToLower(strings.TrimSpace(value))
+	case "":
+		return strings.ToLower(strings.TrimSpace(fallback))
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
 }

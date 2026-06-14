@@ -36,7 +36,7 @@ func TestHandleMessageCreatesThresholdAlertFromGroupedEnergyTopic(t *testing.T) 
 		},
 		&stubInactivityRuleRepository{},
 		&stubDeviceActivityRepository{},
-		commandservices.NewAlertCommandService(alertRepo, nil, nil, log.New(io.Discard, "", 0)),
+		commandservices.NewAlertCommandService(alertRepo, nil, nil, "pending", log.New(io.Discard, "", 0)),
 		log.New(io.Discard, "", 0),
 	)
 
