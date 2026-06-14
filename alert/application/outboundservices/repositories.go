@@ -26,6 +26,7 @@ type AlertRepository interface {
 // AlertEventPublisher emits integration events after an alert is created.
 type AlertEventPublisher interface {
 	PublishJSON(ctx context.Context, key string, payload any) error
+	Topic() string
 }
 
 // AlertThresholdRepository persists thresholds and lists the active ones used

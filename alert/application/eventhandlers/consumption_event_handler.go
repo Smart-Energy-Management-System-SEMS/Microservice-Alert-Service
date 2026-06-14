@@ -91,6 +91,14 @@ func (h *IntegrationEventHandler) handleEnergyEvent(ctx context.Context, event i
 		return nil
 	}
 
+	h.logger.Printf(
+		"energy event accepted topic=%s eventType=%s user_id=%s device_id=%s",
+		event.Topic,
+		eventType,
+		userID,
+		deviceID,
+	)
+
 	recordedAt := extractTime(body, "recorded_at", "timestamp", "created_at", "triggered_at", "occurredAt", "occurred_at")
 	metrics := extractEnergyMetrics(body)
 	if len(metrics) == 0 {
@@ -146,6 +154,15 @@ func (h *IntegrationEventHandler) handleGenericEvent(ctx context.Context, event 
 		definition.Severity = firstNonEmptyString(body, []string{"severity", "alert_severity"}, definition.Severity)
 	}
 
+	h.logger.Printf(
+		"generic alert event accepted topic=%s eventType=%s user_id=%s device_id=%s alert_type=%s",
+		event.Topic,
+		eventType,
+		userID,
+		deviceID,
+		definition.AlertType,
+	)
+
 	cmd := commands.CreateAlertCommand{
 		UserID:      userID,
 		DeviceID:    deviceID,
@@ -157,9 +174,28 @@ func (h *IntegrationEventHandler) handleGenericEvent(ctx context.Context, event 
 		TriggeredAt: triggeredAt,
 	}
 
+	h.logger.Printf(
+		"generic alert creation attempt topic=%s eventType=%s user_id=%s device_id=%s alert_type=%s",
+		event.Topic,
+		eventType,
+		userID,
+		deviceID,
+		cmd.AlertType,
+	)
+
 	if _, err := h.alertService.CreateAlertAndNotify(ctx, cmd); err != nil {
 		h.logger.Printf("generic alert creation error topic=%s eventType=%s: %v", event.Topic, event.EventType, err)
+		return nil
 	}
+
+	h.logger.Printf(
+		"generic alert persisted topic=%s eventType=%s user_id=%s device_id=%s alert_type=%s",
+		event.Topic,
+		eventType,
+		userID,
+		deviceID,
+		cmd.AlertType,
+	)
 
 	return nil
 }
@@ -217,6 +253,17 @@ func (h *IntegrationEventHandler) evaluateThresholds(
 			TriggeredAt: recordedAt,
 		}
 
+		h.logger.Printf(
+			"threshold alert creation attempt topic=%s eventType=%s user_id=%s device_id=%s metric=%s observed=%s threshold_value=%s",
+			event.Topic,
+			effectiveEventType(event),
+			userID,
+			deviceID,
+			threshold.Metric,
+			formatFloat(value),
+			formatFloat(threshold.ThresholdValue),
+		)
+
 		if _, err := h.alertService.CreateAlertAndNotify(ctx, cmd); err != nil {
 			h.logger.Printf("alert creation error topic=%s eventType=%s user_id=%s device_id=%s metric=%s threshold_value=%s: %v", event.Topic, effectiveEventType(event), userID, deviceID, threshold.Metric, formatFloat(threshold.ThresholdValue), err)
 			continue
@@ -268,9 +315,25 @@ func (h *IntegrationEventHandler) evaluateInactivity(
 			TriggeredAt:      recordedAt,
 		}
 
+		h.logger.Printf(
+			"inactivity alert creation attempt user_id=%s device_id=%s rule_id=%s max_inactive_minutes=%d",
+			userID,
+			deviceID,
+			rule.InactivityRuleID,
+			rule.MaxInactiveMinutes,
+		)
+
 		if _, err := h.alertService.CreateAlertAndNotify(ctx, cmd); err != nil {
 			h.logger.Printf("inactivity alert error: %v", err)
+			continue
 		}
+
+		h.logger.Printf(
+			"inactivity alert persisted user_id=%s device_id=%s rule_id=%s",
+			userID,
+			deviceID,
+			rule.InactivityRuleID,
+		)
 	}
 
 	return nil

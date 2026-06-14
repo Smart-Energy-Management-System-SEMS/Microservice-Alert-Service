@@ -52,7 +52,7 @@ Opcional para desarrollo local sin Config Service:
 - `KAFKA_CONSUMPTION_TOPICS`
 - `KAFKA_CONSUMPTION_TOPIC`
 - `KAFKA_ALERTS_TOPIC`
-- `ALERT_DEFAULT_STATUS` (por defecto `pending`; el micro normaliza `open` -> `pending`)
+- `ALERT_DEFAULT_STATUS` (por defecto `open`; el micro normaliza `pending` y `active` a `open`)
 - `KAFKA_TOPICS` (topics a autocrear en Docker, separados por comas)
 - `MAIL_HOST`
 
@@ -138,7 +138,7 @@ Para Azure Container Apps, configurar variables de entorno (sin localhost):
 - `KAFKA_BROKERS` (broker privado, ej. `broker:9092`)
 - `KAFKA_CONSUMPTION_TOPICS=energy.events,analytics.events`
 - `KAFKA_ALERTS_TOPIC=alerts.events`
-- `ALERT_DEFAULT_STATUS=pending`
+- `ALERT_DEFAULT_STATUS=open`
 - `KAFKA_SECURITY_PROTOCOL`
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`

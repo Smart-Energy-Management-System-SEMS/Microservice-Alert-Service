@@ -35,7 +35,7 @@ func main() {
 	logger.Printf("kafka enabled: %t", cfg.KafkaEnabled)
 	logger.Printf("kafka consumption topics: %v | group: %s", cfg.KafkaConsumptionTopics, cfg.KafkaConsumerGroup)
 	logger.Printf("kafka alert publish topic: %s", cfg.KafkaAlertCreatedTopic)
-	logger.Printf("alert default status: %s", cfg.AlertDefaultStatus)
+	logger.Printf("alert default status normalized: %s", cfg.AlertDefaultStatus)
 
 	db, err := gormconfig.NewDatabase(cfg.DatabaseURL)
 	if err != nil {

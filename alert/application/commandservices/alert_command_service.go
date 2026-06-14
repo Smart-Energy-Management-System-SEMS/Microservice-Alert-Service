@@ -40,7 +40,7 @@ func NewAlertCommandService(
 		repo:          repo,
 		publisher:     publisher,
 		notifier:      notifier,
-		defaultStatus: normalizeAlertStatus(defaultStatus, "pending"),
+		defaultStatus: normalizeAlertStatus(defaultStatus, "open"),
 		logger:        logger,
 	}
 }
@@ -67,16 +67,51 @@ func (s *AlertCommandService) CreateAlert(ctx context.Context, cmd commands.Crea
 		alert.TriggeredAt = time.Now().UTC()
 	}
 
+	s.logger.Printf(
+		"create alert start alert_id=%s user_id=%s device_id=%s alert_type=%s status=%s",
+		alert.AlertID,
+		alert.UserID,
+		alert.DeviceID,
+		alert.AlertType,
+		alert.Status,
+	)
+
 	// Persist; on failure propagate the error to the caller.
 	if err := s.repo.Create(ctx, alert); err != nil {
+		s.logger.Printf(
+			"create alert persistence error alert_id=%s user_id=%s device_id=%s alert_type=%s: %v",
+			alert.AlertID,
+			alert.UserID,
+			alert.DeviceID,
+			alert.AlertType,
+			err,
+		)
 		return nil, err
 	}
 
+	s.logger.Printf(
+		"create alert persisted alert_id=%s user_id=%s device_id=%s alert_type=%s",
+		alert.AlertID,
+		alert.UserID,
+		alert.DeviceID,
+		alert.AlertType,
+	)
+
 	if s.publisher != nil {
+		s.logger.Printf(
+			"create alert publish attempt alert_id=%s topic=%s",
+			alert.AlertID,
+			s.publisher.Topic(),
+		)
 		if err := s.publisher.PublishJSON(ctx, alert.AlertID.String(), buildAlertCreatedEvent(alert)); err != nil {
 			s.logger.Printf("alert event publish error: %v", err)
 			return alert, err
 		}
+		s.logger.Printf(
+			"create alert published alert_id=%s topic=%s",
+			alert.AlertID,
+			s.publisher.Topic(),
+		)
 	}
 
 	return alert, nil
@@ -92,10 +127,24 @@ func (s *AlertCommandService) CreateAlertAndNotify(ctx context.Context, cmd comm
 
 	// Notify only if a notifier is configured (it is optional).
 	if s.notifier != nil {
+		s.logger.Printf(
+			"create alert notify attempt alert_id=%s user_id=%s device_id=%s alert_type=%s",
+			alert.AlertID,
+			alert.UserID,
+			alert.DeviceID,
+			alert.AlertType,
+		)
 		if notifyErr := s.notifier.Notify(ctx, alert); notifyErr != nil {
 			s.logger.Printf("notification error: %v", notifyErr)
 			return alert, notifyErr
 		}
+		s.logger.Printf(
+			"create alert notify success alert_id=%s user_id=%s device_id=%s alert_type=%s",
+			alert.AlertID,
+			alert.UserID,
+			alert.DeviceID,
+			alert.AlertType,
+		)
 	}
 
 	return alert, nil
@@ -108,11 +157,11 @@ func (s *AlertCommandService) UpdateAlertStatus(ctx context.Context, cmd command
 
 func normalizeAlertStatus(value string, fallback string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "open":
-		return "pending"
+	case "open", "pending", "active":
+		return "open"
 	case "closed":
 		return "resolved"
-	case "pending", "active", "resolved", "dismissed", "acknowledged":
+	case "resolved", "dismissed", "acknowledged":
 		return strings.ToLower(strings.TrimSpace(value))
 	case "":
 		return strings.ToLower(strings.TrimSpace(fallback))
