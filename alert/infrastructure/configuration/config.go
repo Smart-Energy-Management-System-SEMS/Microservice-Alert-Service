@@ -76,7 +76,7 @@ func Load() (Config, error) {
 	}
 
 	if err := cfg.loadFromConfigService(); err != nil {
-		return cfg, err
+		fmt.Fprintf(os.Stderr, "alert-service config warning: config service unavailable, using env vars: %v\n", err)
 	}
 
 	if cfg.ServerPort == "" {
