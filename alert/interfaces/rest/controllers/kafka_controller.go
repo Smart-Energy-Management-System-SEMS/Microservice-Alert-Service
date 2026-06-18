@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type KafkaController struct {
@@ -39,8 +40,7 @@ func (c *KafkaController) PublishTestEvent(ctx *gin.Context) {
 	if len(payload) == 0 {
 		payload = map[string]any{
 			"eventType":  "alert.created",
-			"event":      "alert.created",
-			"source":     "alert-service",
+			"eventId":    uuid.NewString(),
 			"occurredAt": time.Now().UTC().Format(time.RFC3339),
 			"data": map[string]any{
 				"message": "test event from alert-service",

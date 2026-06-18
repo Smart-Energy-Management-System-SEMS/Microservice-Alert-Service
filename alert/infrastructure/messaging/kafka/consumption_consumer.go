@@ -28,7 +28,7 @@ type readerBinding struct {
 
 func NewConsumptionConsumer(cfg configuration.Config, handler TopicMessageHandler, logger *log.Logger) *ConsumptionConsumer {
 	brokers := normalizeKafkaHosts(cfg)
-	topics := normalizeTopics(cfg.KafkaConsumptionTopics, cfg.KafkaConsumptionTopic)
+	topics := normalizeTopics(cfg.KafkaConsumptionTopics)
 	logger.Printf("consumer brokers effective: %v", brokers)
 	logger.Printf("consumer topics effective: %v", topics)
 	if !cfg.KafkaEnabled {
@@ -65,11 +65,7 @@ func NewConsumptionConsumer(cfg configuration.Config, handler TopicMessageHandle
 	}
 }
 
-func normalizeTopics(topics []string, legacyTopic string) []string {
-	if len(topics) == 0 && strings.TrimSpace(legacyTopic) != "" {
-		topics = []string{legacyTopic}
-	}
-
+func normalizeTopics(topics []string) []string {
 	seen := make(map[string]struct{}, len(topics))
 	out := make([]string, 0, len(topics))
 	for _, topic := range topics {

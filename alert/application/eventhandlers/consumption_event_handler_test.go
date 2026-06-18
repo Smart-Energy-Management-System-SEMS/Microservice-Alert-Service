@@ -41,7 +41,7 @@ func TestHandleMessageCreatesThresholdAlertFromGroupedEnergyTopic(t *testing.T) 
 	)
 
 	payload := []byte(`{
-		"eventType":"energy.reading.created",
+		"eventType":"energy.consumption.recorded",
 		"occurredAt":"2026-06-13T12:00:00Z",
 		"data":{
 			"user_id":"` + userID.String() + `",
@@ -64,6 +64,26 @@ func TestHandleMessageCreatesThresholdAlertFromGroupedEnergyTopic(t *testing.T) 
 	}
 	if alert.ThresholdID == nil || *alert.ThresholdID != thresholdID {
 		t.Fatalf("expected threshold id %s, got %+v", thresholdID, alert.ThresholdID)
+	}
+}
+
+func TestHandleMessageRejectsMissingEventType(t *testing.T) {
+	handler := NewIntegrationEventHandler(
+		&stubThresholdRepository{},
+		&stubInactivityRuleRepository{},
+		&stubDeviceActivityRepository{},
+		commandservices.NewAlertCommandService(&stubAlertRepository{}, nil, nil, "open", log.New(io.Discard, "", 0)),
+		log.New(io.Discard, "", 0),
+	)
+
+	payload := []byte(`{
+		"occurredAt":"2026-06-13T12:00:00Z",
+		"data":{"message":"missing type"}
+	}`)
+
+	err := handler.HandleMessage(context.Background(), "energy.events", payload)
+	if err == nil {
+		t.Fatal("expected missing eventType error")
 	}
 }
 

@@ -67,6 +67,47 @@ func TestCreateAlertNormalizesPendingStatusToOpen(t *testing.T) {
 	}
 }
 
+func TestBuildAlertCreatedEventUsesStandardEnvelope(t *testing.T) {
+	triggeredAt := time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC)
+	alert := &entities.Alert{
+		AlertID:     uuid.New(),
+		UserID:      uuid.New(),
+		DeviceID:    uuid.New(),
+		AlertType:   "threshold",
+		Title:       "High power",
+		Message:     "Threshold exceeded",
+		Severity:    "high",
+		Status:      "open",
+		TriggeredAt: triggeredAt,
+	}
+
+	event := buildAlertCreatedEvent(alert)
+
+	if event["eventType"] != "alert.created" {
+		t.Fatalf("unexpected eventType: %v", event["eventType"])
+	}
+	if event["eventId"] != alert.AlertID.String() {
+		t.Fatalf("unexpected eventId: %v", event["eventId"])
+	}
+	if event["occurredAt"] != triggeredAt.Format(time.RFC3339) {
+		t.Fatalf("unexpected occurredAt: %v", event["occurredAt"])
+	}
+	if _, exists := event["alert_id"]; exists {
+		t.Fatal("did not expect alert_id duplicated at root")
+	}
+	if _, exists := event["event"]; exists {
+		t.Fatal("did not expect legacy event field")
+	}
+
+	data, ok := event["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected data object, got %T", event["data"])
+	}
+	if data["alert_id"] != alert.AlertID.String() {
+		t.Fatalf("unexpected data.alert_id: %v", data["alert_id"])
+	}
+}
+
 type alertRepoSpy struct {
 	created []*entities.Alert
 }

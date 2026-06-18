@@ -197,14 +197,9 @@ func buildAlertCreatedEvent(alert *entities.Alert) map[string]any {
 
 	event := map[string]any{
 		"eventType":  "alert.created",
-		"event":      "alert.created",
-		"source":     "alert-service",
+		"eventId":    alert.AlertID.String(),
 		"occurredAt": alert.TriggeredAt.UTC().Format(time.RFC3339),
 		"data":       data,
-	}
-
-	for key, value := range data {
-		event[key] = value
 	}
 
 	return event

@@ -1,6 +1,6 @@
 # Alert Service (SEMS)
 
-Microservicio de alertas para SEMS. Gestiona umbrales, reglas de inactividad, alertas y notificaciones (email/SMS), y consume eventos de multiples microservicios por Kafka.
+Microservicio de alertas para SEMS. Gestiona umbrales, reglas de inactividad, alertas y notificaciones (email/SMS), y consume solo eventos agrupados de energia y analytics por Kafka/Event Hubs.
 
 ## Configuracion centralizada
 
@@ -14,7 +14,7 @@ Variable principal:
 
 - `CONFIG_SERVICE_URL` (ej. URL interna del Config Service)
 
-Si el Config Service no devuelve valores, el servicio usa fallback local seguro para no romper compatibilidad.
+Si el Config Service no devuelve valores, el servicio usa fallback local seguro dentro del esquema nuevo: consume `energy.events` y `analytics.events`, y publica `alerts.events`.
 
 ## Variables requeridas
 
@@ -50,7 +50,6 @@ Opcional para desarrollo local sin Config Service:
 - `KAFKA_BROKERS` (ej. `kafka:9092` en Docker local o Event Hubs en Azure)
 - `KAFKA_CONSUMER_GROUP`
 - `KAFKA_CONSUMPTION_TOPICS`
-- `KAFKA_CONSUMPTION_TOPIC`
 - `KAFKA_ALERTS_TOPIC`
 - `ALERT_DEFAULT_STATUS` (por defecto `open`; el micro normaliza `pending` y `active` a `open`)
 - `KAFKA_TOPICS` (topics a autocrear en Docker, separados por comas)
@@ -76,7 +75,7 @@ Opcional para desarrollo local sin Config Service:
 
 1. Copia `.env.example` a `.env`.
 2. Define credenciales reales (DB, Twilio, correo).
-3. Si no tienes Config Service, define tambien `KAFKA_ENABLED`, `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPICS`. `KAFKA_CONSUMPTION_TOPIC` sigue disponible como fallback legacy de un solo topic.
+3. Si no tienes Config Service, define tambien `KAFKA_ENABLED`, `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPICS`.
 4. Ejecuta:
 
 ```bash
@@ -88,7 +87,15 @@ Topics agrupados usados por este microservicio:
 
 - Consume `energy.events`
 - Consume `analytics.events`
-- Publica `alerts.events` con `eventType=alert.created`
+- Publica `alerts.events`
+- `energy.consumption.recorded`, `analytics.anomaly.detected`, `analytics.recommendation.generated` y `alert.created` son `eventType`, no topics fisicos.
+
+Envelope estandar de salida:
+
+- `eventType`
+- `eventId`
+- `occurredAt`
+- `data`
 
 ## Docker Compose local
 
@@ -178,6 +185,8 @@ az containerapp update \
 - Las migraciones GORM se ejecutan al iniciar.
 - El dominio mantiene independencia de frameworks e infraestructura (DDD).
 - El consumidor Kafka se desactiva automaticamente si faltan brokers o topics.
-- `Alerts` ahora fuerza el set minimo de topics de su flujo: `energy.events` y `analytics.events`.
-- Dentro de esos topics agrupados, el micro detecta por `eventType` al menos `energy.consumption.recorded`, `analytics.anomaly.detected` y `analytics.recommendation.generated`.
-- Cuando genera una alerta, publica en `alerts.events` usando `eventType=alert.created`.
+- `Alerts` opera solo con `energy.events`, `analytics.events` y `alerts.events`.
+- El routing de consumo depende exclusivamente de `eventType`.
+- Si un mensaje llega sin `eventType`, el micro lo rechaza como invalido.
+- `alert.created` se publica solo como `eventType` dentro de `alerts.events`.
+- Soporte legacy desactivado en runtime: `KAFKA_CONSUMPTION_TOPIC`, `KAFKA_TOPIC_DEVICE_READING_CREATED`, `KAFKA_TOPIC_ALERT_CREATED`, `device.events`, `iam.events`, `payments.events`, `subscriptions.events`, `billing.events` y `alert.events`.

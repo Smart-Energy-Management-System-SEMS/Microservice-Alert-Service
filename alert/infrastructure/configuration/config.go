@@ -30,7 +30,6 @@ type Config struct {
 	KafkaClientID          string
 	KafkaConsumerGroup     string
 	KafkaConsumptionTopics []string
-	KafkaConsumptionTopic  string
 	KafkaAlertCreatedTopic string
 	AlertDefaultStatus     string
 	TwilioAccountSID       string
@@ -64,8 +63,7 @@ func Load() (Config, error) {
 		KafkaClientID:          strings.TrimSpace(os.Getenv("KAFKA_CLIENT_ID")),
 		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
 		KafkaConsumptionTopics: getTopicsFromEnv(),
-		KafkaConsumptionTopic:  getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
-		KafkaAlertCreatedTopic: getFirstEnv([]string{"KAFKA_ALERTS_TOPIC", "KAFKA_TOPIC_ALERT_CREATED"}, ""),
+		KafkaAlertCreatedTopic: getFirstEnv([]string{"KAFKA_ALERTS_TOPIC"}, ""),
 		AlertDefaultStatus:     getFirstEnv([]string{"ALERT_DEFAULT_STATUS"}, ""),
 		TwilioAccountSID:       os.Getenv("TWILIO_ACCOUNT_SID"),
 		TwilioAPIKey:           os.Getenv("TWILIO_API_KEY"),
@@ -91,12 +89,8 @@ func Load() (Config, error) {
 	if cfg.KafkaConsumerGroup == "" {
 		cfg.KafkaConsumerGroup = "alert-service-group"
 	}
-	if len(cfg.KafkaConsumptionTopics) == 0 && cfg.KafkaConsumptionTopic != "" {
-		cfg.KafkaConsumptionTopics = splitCSV(cfg.KafkaConsumptionTopic)
-	}
-	cfg.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(cfg.KafkaConsumptionTopics, cfg.KafkaConsumptionTopic)
-	cfg.KafkaConsumptionTopic = primaryKafkaConsumptionTopic(cfg.KafkaConsumptionTopics)
-	cfg.KafkaAlertCreatedTopic = normalizeKafkaAlertTopic(cfg.KafkaAlertCreatedTopic)
+	cfg.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(cfg.KafkaConsumptionTopics)
+	cfg.KafkaAlertCreatedTopic = "alerts.events"
 	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers, cfg.Environment)
 	cfg.AlertDefaultStatus = normalizeAlertStatus(cfg.AlertDefaultStatus, "open")
 	if cfg.MailHost == "" {
@@ -166,9 +160,6 @@ func (c *Config) loadFromConfigService() error {
 	if len(c.KafkaConsumptionTopics) == 0 {
 		c.KafkaConsumptionTopics = getStringSlice(serviceData, "kafkaConsumptionTopics", "kafka_consumption_topics", "consumptionTopics", "topics")
 	}
-	if c.KafkaConsumptionTopic == "" {
-		c.KafkaConsumptionTopic = getString(serviceData, "kafkaConsumptionTopic", "kafka_consumption_topic", "consumptionTopic", "topic")
-	}
 	if c.KafkaAlertCreatedTopic == "" {
 		c.KafkaAlertCreatedTopic = getString(
 			serviceData,
@@ -198,12 +189,8 @@ func (c *Config) loadFromConfigService() error {
 	if c.MailFrom == "" {
 		c.MailFrom = getString(serviceData, "mailFrom", "mail_from")
 	}
-	if len(c.KafkaConsumptionTopics) == 0 && c.KafkaConsumptionTopic != "" {
-		c.KafkaConsumptionTopics = splitCSV(c.KafkaConsumptionTopic)
-	}
-	c.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(c.KafkaConsumptionTopics, c.KafkaConsumptionTopic)
-	c.KafkaConsumptionTopic = primaryKafkaConsumptionTopic(c.KafkaConsumptionTopics)
-	c.KafkaAlertCreatedTopic = normalizeKafkaAlertTopic(c.KafkaAlertCreatedTopic)
+	c.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(c.KafkaConsumptionTopics)
+	c.KafkaAlertCreatedTopic = "alerts.events"
 	c.AlertDefaultStatus = normalizeAlertStatus(c.AlertDefaultStatus, "open")
 
 	return nil
@@ -412,16 +399,10 @@ func splitEnv(key string, defaultValue string) []string {
 
 func getTopicsFromEnv() []string {
 	topics := splitEnv("KAFKA_CONSUMPTION_TOPICS", "")
-	if len(topics) > 0 {
-		return topics
+	if len(topics) == 0 {
+		return requiredKafkaConsumptionTopics()
 	}
-
-	legacyTopic := getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, "")
-	if legacyTopic == "" {
-		return nil
-	}
-
-	return splitCSV(legacyTopic)
+	return topics
 }
 
 func splitCSV(value string) []string {
@@ -444,63 +425,27 @@ func requiredKafkaConsumptionTopics() []string {
 	}
 }
 
-func normalizeKafkaConsumptionTopics(topics []string, legacyTopic string) []string {
-	normalized := make([]string, 0, len(topics)+1)
-	seen := make(map[string]struct{}, len(topics)+1)
+func normalizeKafkaConsumptionTopics(topics []string) []string {
+	return mergeTopics(filterAllowedKafkaTopics(topics), requiredKafkaConsumptionTopics())
+}
 
-	for _, topic := range append(topics, legacyTopic) {
-		mapped, ok := mapToGroupedKafkaTopic(topic)
-		if !ok {
+func filterAllowedKafkaTopics(topics []string) []string {
+	allowed := make([]string, 0, len(topics))
+	seen := make(map[string]struct{}, len(topics))
+
+	for _, topic := range topics {
+		normalized := strings.ToLower(strings.TrimSpace(topic))
+		if normalized != "energy.events" && normalized != "analytics.events" {
 			continue
 		}
-		if _, exists := seen[mapped]; exists {
+		if _, exists := seen[normalized]; exists {
 			continue
 		}
-		seen[mapped] = struct{}{}
-		normalized = append(normalized, mapped)
+		seen[normalized] = struct{}{}
+		allowed = append(allowed, normalized)
 	}
 
-	if len(normalized) == 0 {
-		return requiredKafkaConsumptionTopics()
-	}
-
-	return mergeTopics(normalized, requiredKafkaConsumptionTopics())
-}
-
-func primaryKafkaConsumptionTopic(topics []string) string {
-	if len(topics) == 0 {
-		return "energy.events"
-	}
-	return topics[0]
-}
-
-func normalizeKafkaAlertTopic(topic string) string {
-	mapped, ok := mapToGroupedKafkaTopic(topic)
-	if ok && mapped == "alerts.events" {
-		return mapped
-	}
-	if strings.TrimSpace(topic) == "" {
-		return "alerts.events"
-	}
-	if strings.EqualFold(strings.TrimSpace(topic), "alert.created") {
-		return "alerts.events"
-	}
-	return strings.TrimSpace(topic)
-}
-
-func mapToGroupedKafkaTopic(topic string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(topic)) {
-	case "":
-		return "", false
-	case "energy.events", "energy.consumption.recorded", "energy.reading.created":
-		return "energy.events", true
-	case "analytics.events", "analytics.anomaly.detected", "analytics.recommendation.generated":
-		return "analytics.events", true
-	case "alerts.events", "alert.created", "monitoring.alert.created":
-		return "alerts.events", true
-	default:
-		return strings.TrimSpace(topic), false
-	}
+	return allowed
 }
 
 func mergeTopics(base []string, extras []string) []string {
