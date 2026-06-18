@@ -34,6 +34,8 @@ Mantener en `.env` solo variables sensibles o propias del despliegue:
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`
 - `KAFKA_PASSWORD`
+- `KAFKA_SASL_USERNAME`
+- `KAFKA_SASL_PASSWORD`
 - `GIN_MODE`
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_API_KEY`
@@ -70,6 +72,8 @@ Opcional para desarrollo local sin Config Service:
 - `POST /api/v1/notification-preferences`
 - `GET /api/v1/users/:userId/notification-preferences`
 - `POST /api/v1/kafka/publish-test` (publica un evento de prueba en Kafka)
+- `POST /api/v1/diagnostics/validate` (valida DB, Kafka/Event Hubs y variables clave)
+- `GET /swagger/index.html` (UI para pruebas)
 
 ## Ejecucion local
 
@@ -113,6 +117,12 @@ API local:
 http://localhost:8085
 ```
 
+Swagger local:
+
+```text
+http://localhost:8085/swagger/index.html
+```
+
 ## Docker
 
 Build:
@@ -150,6 +160,8 @@ Para Azure Container Apps, configurar variables de entorno (sin localhost):
 - `KAFKA_SASL_MECHANISM`
 - `KAFKA_USERNAME`
 - `KAFKA_PASSWORD`
+- `KAFKA_SASL_USERNAME=$ConnectionString`
+- `KAFKA_SASL_PASSWORD=<Event-Hubs-connection-string>`
 - `DATABASE_URL`
 
 Ejemplo de creacion/actualizacion (referencial):
@@ -186,6 +198,7 @@ az containerapp update \
 - El dominio mantiene independencia de frameworks e infraestructura (DDD).
 - El consumidor Kafka se desactiva automaticamente si faltan brokers o topics.
 - `Alerts` opera solo con `energy.events`, `analytics.events` y `alerts.events`.
+- Para Azure/Event Hubs debes tener creados los Event Hubs `energy.events` y `analytics.events`, porque el micro los consume.
 - El routing de consumo depende exclusivamente de `eventType`.
 - Si un mensaje llega sin `eventType`, el micro lo rechaza como invalido.
 - `alert.created` se publica solo como `eventType` dentro de `alerts.events`.

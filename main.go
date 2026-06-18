@@ -101,6 +101,7 @@ func main() {
 		logger,
 	)
 	kafkaController := controllers.NewKafkaController(kafkaProducer)
+	diagnosticsController := controllers.NewDiagnosticsController(cfg, db, kafkaProducer)
 
 	router := rest.NewRouter(
 		cfg,
@@ -113,6 +114,7 @@ func main() {
 		preferenceCommandService,
 		preferenceQueryService,
 		kafkaController,
+		diagnosticsController,
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

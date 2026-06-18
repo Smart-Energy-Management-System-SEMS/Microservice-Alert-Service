@@ -23,6 +23,7 @@ func NewRouter(
 	preferenceCommand *commandservices.NotificationPreferenceCommandService,
 	preferenceQuery *queryservices.NotificationPreferenceQueryService,
 	kafkaController *controllers.KafkaController,
+	diagnosticsController *controllers.DiagnosticsController,
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -50,6 +51,7 @@ func NewRouter(
 	thresholdController := controllers.NewThresholdController(thresholdCommand, thresholdQuery)
 	inactivityController := controllers.NewInactivityRuleController(inactivityCommand, inactivityQuery)
 	preferenceController := controllers.NewNotificationPreferenceController(preferenceCommand, preferenceQuery)
+	swaggerController := controllers.NewSwaggerController(cfg)
 
 	api := router.Group("/api/v1")
 	{
@@ -72,7 +74,14 @@ func NewRouter(
 		api.POST("/notification-preferences", preferenceController.CreatePreference)
 		api.GET("/users/:userId/notification-preferences", preferenceController.GetPreferencesByUser)
 		api.POST("/kafka/publish-test", kafkaController.PublishTestEvent)
+		api.POST("/diagnostics/validate", diagnosticsController.ValidateAll)
 	}
+
+	router.GET("/swagger", func(ctx *gin.Context) {
+		ctx.Redirect(http.StatusPermanentRedirect, "/swagger/index.html")
+	})
+	router.GET("/swagger/index.html", swaggerController.Index)
+	router.GET("/swagger/openapi.json", swaggerController.OpenAPI)
 
 	return router
 }

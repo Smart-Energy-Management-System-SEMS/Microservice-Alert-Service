@@ -58,8 +58,8 @@ func Load() (Config, error) {
 		KafkaBrokers:           splitEnv("KAFKA_BROKERS", ""),
 		KafkaSecurityProtocol:  strings.TrimSpace(os.Getenv("KAFKA_SECURITY_PROTOCOL")),
 		KafkaSASLMechanism:     strings.TrimSpace(os.Getenv("KAFKA_SASL_MECHANISM")),
-		KafkaUsername:          strings.TrimSpace(os.Getenv("KAFKA_USERNAME")),
-		KafkaPassword:          os.Getenv("KAFKA_PASSWORD"),
+		KafkaUsername:          normalizeKafkaUsername(getFirstEnv([]string{"KAFKA_USERNAME", "KAFKA_SASL_USERNAME"}, "")),
+		KafkaPassword:          getFirstEnv([]string{"KAFKA_PASSWORD", "KAFKA_SASL_PASSWORD"}, ""),
 		KafkaClientID:          strings.TrimSpace(os.Getenv("KAFKA_CLIENT_ID")),
 		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
 		KafkaConsumptionTopics: getTopicsFromEnv(),
@@ -493,5 +493,15 @@ func normalizeAlertStatus(value string, fallback string) string {
 		return strings.ToLower(strings.TrimSpace(fallback))
 	default:
 		return strings.ToLower(strings.TrimSpace(value))
+	}
+}
+
+func normalizeKafkaUsername(value string) string {
+	trimmed := strings.TrimSpace(value)
+	switch strings.ToLower(trimmed) {
+	case "connectionstring", "onnectionstring":
+		return "$ConnectionString"
+	default:
+		return trimmed
 	}
 }
