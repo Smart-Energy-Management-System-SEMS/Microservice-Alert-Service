@@ -1,6 +1,6 @@
 # Alert Service (SEMS)
 
-Microservicio de alertas para SEMS. Gestiona umbrales, reglas de inactividad, alertas y notificaciones (email/SMS), y consume eventos de consumo por Kafka.
+Microservicio de alertas para SEMS. Gestiona umbrales, reglas de inactividad, alertas y notificaciones (email/SMS), y consume solo eventos agrupados de energia y analytics por Kafka/Event Hubs.
 
 ## Configuracion centralizada
 
@@ -12,18 +12,31 @@ Este servicio ahora prioriza configuracion desde un Config Service usando:
 
 Variable principal:
 
-- `CONFIG_SERVICE_URL` (local: `http://localhost:8090`)
+- `CONFIG_SERVICE_URL` (ej. URL interna del Config Service)
 
-Si el Config Service no devuelve valores, el servicio usa fallback local seguro para no romper compatibilidad.
+Si el Config Service no devuelve valores, el servicio usa fallback local seguro dentro del esquema nuevo: consume `energy.events` y `analytics.events`, y publica `alerts.events`.
 
-## Variables locales del microservicio
+## Variables requeridas
 
 Mantener en `.env` solo variables sensibles o propias del despliegue:
 
-- `SERVER_PORT`
+- `PORT` (recomendado para contenedores/Azure)
+- `SERVER_PORT` (compatibilidad legacy local)
 - `SERVICE_NAME`
 - `CONFIG_SERVICE_URL`
 - `DATABASE_URL`
+- `KAFKA_ENABLED`
+- `KAFKA_BROKERS`
+- `KAFKA_CONSUMPTION_TOPICS`
+- `KAFKA_ALERTS_TOPIC`
+- `ALERT_DEFAULT_STATUS`
+- `KAFKA_SECURITY_PROTOCOL`
+- `KAFKA_SASL_MECHANISM`
+- `KAFKA_USERNAME`
+- `KAFKA_PASSWORD`
+- `KAFKA_SASL_USERNAME`
+- `KAFKA_SASL_PASSWORD`
+- `GIN_MODE`
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_API_KEY`
 - `TWILIO_API_SECRET`
@@ -35,9 +48,13 @@ Mantener en `.env` solo variables sensibles o propias del despliegue:
 
 Opcional para desarrollo local sin Config Service:
 
-- `KAFKA_BROKERS` (ej. `localhost:9092`)
+- `KAFKA_ENABLED` (`true` para consumir/publicar; `false` para levantar solo HTTP)
+- `KAFKA_BROKERS` (ej. `kafka:9092` en Docker local o Event Hubs en Azure)
 - `KAFKA_CONSUMER_GROUP`
-- `KAFKA_CONSUMPTION_TOPIC`
+- `KAFKA_CONSUMPTION_TOPICS`
+- `KAFKA_ALERTS_TOPIC`
+- `ALERT_DEFAULT_STATUS` (por defecto `open`; el micro normaliza `pending` y `active` a `open`)
+- `KAFKA_TOPICS` (topics a autocrear en Docker, separados por comas)
 - `MAIL_HOST`
 
 ## Endpoints
@@ -55,18 +72,34 @@ Opcional para desarrollo local sin Config Service:
 - `POST /api/v1/notification-preferences`
 - `GET /api/v1/users/:userId/notification-preferences`
 - `POST /api/v1/kafka/publish-test` (publica un evento de prueba en Kafka)
+- `POST /api/v1/diagnostics/validate` (valida DB, Kafka/Event Hubs y variables clave)
+- `GET /swagger/index.html` (UI para pruebas)
 
 ## Ejecucion local
 
 1. Copia `.env.example` a `.env`.
 2. Define credenciales reales (DB, Twilio, correo).
-3. Si no tienes Config Service local, define tambien `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPIC`.
+3. Si no tienes Config Service, define tambien `KAFKA_ENABLED`, `KAFKA_BROKERS` y opcionalmente `KAFKA_CONSUMER_GROUP`/`KAFKA_CONSUMPTION_TOPICS`.
 4. Ejecuta:
 
 ```bash
 go mod tidy
 go run main.go
 ```
+
+Topics agrupados usados por este microservicio:
+
+- Consume `energy.events`
+- Consume `analytics.events`
+- Publica `alerts.events`
+- `energy.consumption.recorded`, `analytics.anomaly.detected`, `analytics.recommendation.generated` y `alert.created` son `eventType`, no topics fisicos.
+
+Envelope estandar de salida:
+
+- `eventType`
+- `eventId`
+- `occurredAt`
+- `data`
 
 ## Docker Compose local
 
@@ -76,21 +109,82 @@ El proyecto incluye `docker-compose.yml` con PostgreSQL y Kafka locales:
 docker compose up --build
 ```
 
+Al levantar Docker Compose, el servicio `kafka-topics-init` espera a Kafka y crea automaticamente los topics definidos en `KAFKA_TOPICS`.
+
 API local:
 
 ```text
 http://localhost:8085
 ```
 
+Swagger local:
+
+```text
+http://localhost:8085/swagger/index.html
+```
+
+## Docker
+
+Build:
+
+```bash
+docker build -t sems-alert-service:latest .
+```
+
+Run (ejemplo local):
+
+```bash
+docker run --rm -p 8080:8080 ^
+  -e PORT=8080 ^
+  -e GIN_MODE=release ^
+  -e CONFIG_SERVICE_URL=https://config-service.internal ^
+  -e KAFKA_BROKERS=kafka:9092 ^
+  -e DATABASE_URL="postgres://USER:PASSWORD@HOST:5432/DB_NAME?sslmode=disable" ^
+  sems-alert-service:latest
+```
+
 ## Azure Container Apps (recomendado)
 
-Para Azure Container Apps:
+Para Azure Container Apps, configurar variables de entorno (sin localhost):
 
-- Configurar en variables de entorno:
-  - `SERVER_PORT`
-  - `SERVICE_NAME=alert-service`
-  - `CONFIG_SERVICE_URL` (URL interna/privada del Config Service)
+- `PORT=8080`
+- `SERVICE_NAME=alert-service`
+- `GIN_MODE=release`
+- `CONFIG_SERVICE_URL` (URL interna/privada del Config Service)
+- `KAFKA_ENABLED=true`
+- `KAFKA_BROKERS` (broker privado, ej. `broker:9092`)
+- `KAFKA_CONSUMPTION_TOPICS=energy.events,analytics.events`
+- `KAFKA_ALERTS_TOPIC=alerts.events`
+- `ALERT_DEFAULT_STATUS=open`
+- `KAFKA_SECURITY_PROTOCOL`
+- `KAFKA_SASL_MECHANISM`
+- `KAFKA_USERNAME`
+- `KAFKA_PASSWORD`
+- `KAFKA_SASL_USERNAME=$ConnectionString`
+- `KAFKA_SASL_PASSWORD=<Event-Hubs-connection-string>`
+- `DATABASE_URL`
+
+Ejemplo de creacion/actualizacion (referencial):
+
+```bash
+az containerapp update \
+  --name sems-alert-service \
+  --resource-group <RESOURCE_GROUP> \
+  --set-env-vars PORT=8080 GIN_MODE=release SERVICE_NAME=alert-service \
+  --set-env-vars CONFIG_SERVICE_URL=https://<config-service-interno> \
+  --set-env-vars KAFKA_BROKERS=<broker-privado>:9092 \
+  --set-env-vars KAFKA_CONSUMPTION_TOPICS=energy.events,analytics.events \
+  --set-env-vars KAFKA_ALERTS_TOPIC=alerts.events \
+  --set-env-vars KAFKA_SECURITY_PROTOCOL=SASL_SSL \
+  --set-env-vars KAFKA_SASL_MECHANISM=PLAIN \
+  --set-env-vars KAFKA_USERNAME=<kafka-username> \
+  --set-env-vars KAFKA_PASSWORD=<kafka-password> \
+  --set-env-vars DATABASE_URL=<database-url>
+```
+
 - Guardar secretos en Azure Key Vault o secretos de ACA:
+  - `KAFKA_USERNAME`
+  - `KAFKA_PASSWORD`
   - `DATABASE_URL`
   - `TWILIO_*`
   - `MAIL_USERNAME`
@@ -102,4 +196,10 @@ Para Azure Container Apps:
 
 - Las migraciones GORM se ejecutan al iniciar.
 - El dominio mantiene independencia de frameworks e infraestructura (DDD).
-- El consumidor Kafka se desactiva automaticamente si faltan brokers o topic.
+- El consumidor Kafka se desactiva automaticamente si faltan brokers o topics.
+- `Alerts` opera solo con `energy.events`, `analytics.events` y `alerts.events`.
+- Para Azure/Event Hubs debes tener creados los Event Hubs `energy.events` y `analytics.events`, porque el micro los consume.
+- El routing de consumo depende exclusivamente de `eventType`.
+- Si un mensaje llega sin `eventType`, el micro lo rechaza como invalido.
+- `alert.created` se publica solo como `eventType` dentro de `alerts.events`.
+- Soporte legacy desactivado en runtime: `KAFKA_CONSUMPTION_TOPIC`, `KAFKA_TOPIC_DEVICE_READING_CREATED`, `KAFKA_TOPIC_ALERT_CREATED`, `device.events`, `iam.events`, `payments.events`, `subscriptions.events`, `billing.events` y `alert.events`.

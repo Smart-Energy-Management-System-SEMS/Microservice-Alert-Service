@@ -24,7 +24,7 @@ func ToCreateThresholdCommand(req resources.CreateThresholdRequest) (commands.Cr
 		Metric:         req.Metric,
 		Operator:       req.Operator,
 		ThresholdValue: req.ThresholdValue,
-		Active:         req.Active,
+		Active:         req.Active == nil || *req.Active,
 	}, nil
 }
 

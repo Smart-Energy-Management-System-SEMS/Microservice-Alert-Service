@@ -19,9 +19,19 @@ type AlertEventProducer struct {
 
 func NewAlertEventProducer(cfg configuration.Config, logger *log.Logger) *AlertEventProducer {
 	topic := cfg.KafkaAlertCreatedTopic
-	brokers := normalizeKafkaHosts(cfg.KafkaBrokers)
+	brokers := normalizeKafkaHosts(cfg)
 	logger.Printf("producer brokers effective: %v", brokers)
+	if !cfg.KafkaEnabled {
+		logger.Printf("producer disabled by KAFKA_ENABLED=false")
+		return &AlertEventProducer{enabled: false}
+	}
 	if len(brokers) == 0 || topic == "" {
+		return &AlertEventProducer{enabled: false}
+	}
+
+	dialer, err := buildDialer(cfg)
+	if err != nil {
+		logger.Printf("producer kafka dialer config error: %v", err)
 		return &AlertEventProducer{enabled: false}
 	}
 
@@ -29,6 +39,11 @@ func NewAlertEventProducer(cfg configuration.Config, logger *log.Logger) *AlertE
 		Addr:         kafka.TCP(brokers...),
 		Topic:        topic,
 		RequiredAcks: kafka.RequireOne,
+		Transport: &kafka.Transport{
+			Dial: dialer.DialFunc,
+			SASL: dialer.SASLMechanism,
+			TLS:  dialer.TLS,
+		},
 	}
 
 	return &AlertEventProducer{

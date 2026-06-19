@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -17,14 +15,23 @@ import (
 
 type Config struct {
 	ServiceName            string
+	Environment            string
 	ConfigServiceURL       string
 	AutoMigrate            bool
+	KafkaEnabled           bool
 	ServerPort             string
+	CORSAllowedOrigins     []string
 	DatabaseURL            string
 	KafkaBrokers           []string
+	KafkaSecurityProtocol  string
+	KafkaSASLMechanism     string
+	KafkaUsername          string
+	KafkaPassword          string
+	KafkaClientID          string
 	KafkaConsumerGroup     string
-	KafkaConsumptionTopic  string
+	KafkaConsumptionTopics []string
 	KafkaAlertCreatedTopic string
+	AlertDefaultStatus     string
 	TwilioAccountSID       string
 	TwilioAPIKey           string
 	TwilioAPISecret        string
@@ -41,14 +48,23 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		ServiceName:            getEnvOrDefault("SERVICE_NAME", "alert-service"),
+		Environment:            getFirstEnv([]string{"ENVIRONMENT", "APP_ENV"}, "local"),
 		ConfigServiceURL:       strings.TrimSpace(os.Getenv("CONFIG_SERVICE_URL")),
 		AutoMigrate:            getBoolEnvOrDefault("AUTO_MIGRATE", true),
-		ServerPort:             getEnvOrDefault("SERVER_PORT", "8085"),
+		KafkaEnabled:           getBoolEnvOrDefault("KAFKA_ENABLED", true),
+		ServerPort:             getFirstEnv([]string{"PORT", "SERVER_PORT"}, ""),
+		CORSAllowedOrigins:     getCSVEnv([]string{"CORS_ALLOWED_ORIGINS", "ALLOWED_ORIGINS"}, ""),
 		DatabaseURL:            os.Getenv("DATABASE_URL"),
 		KafkaBrokers:           splitEnv("KAFKA_BROKERS", ""),
+		KafkaSecurityProtocol:  strings.TrimSpace(os.Getenv("KAFKA_SECURITY_PROTOCOL")),
+		KafkaSASLMechanism:     strings.TrimSpace(os.Getenv("KAFKA_SASL_MECHANISM")),
+		KafkaUsername:          normalizeKafkaUsername(getFirstEnv([]string{"KAFKA_USERNAME", "KAFKA_SASL_USERNAME"}, "")),
+		KafkaPassword:          getFirstEnv([]string{"KAFKA_PASSWORD", "KAFKA_SASL_PASSWORD"}, ""),
+		KafkaClientID:          strings.TrimSpace(os.Getenv("KAFKA_CLIENT_ID")),
 		KafkaConsumerGroup:     getFirstEnv([]string{"KAFKA_CONSUMER_GROUP", "KAFKA_GROUP_ID"}, ""),
-		KafkaConsumptionTopic:  getFirstEnv([]string{"KAFKA_CONSUMPTION_TOPIC", "KAFKA_TOPIC_DEVICE_READING_CREATED"}, ""),
-		KafkaAlertCreatedTopic: getEnvOrDefault("KAFKA_TOPIC_ALERT_CREATED", ""),
+		KafkaConsumptionTopics: getTopicsFromEnv(),
+		KafkaAlertCreatedTopic: getFirstEnv([]string{"KAFKA_ALERTS_TOPIC"}, ""),
+		AlertDefaultStatus:     getFirstEnv([]string{"ALERT_DEFAULT_STATUS"}, ""),
 		TwilioAccountSID:       os.Getenv("TWILIO_ACCOUNT_SID"),
 		TwilioAPIKey:           os.Getenv("TWILIO_API_KEY"),
 		TwilioAPISecret:        os.Getenv("TWILIO_API_SECRET"),
@@ -60,22 +76,23 @@ func Load() (Config, error) {
 	}
 
 	if err := cfg.loadFromConfigService(); err != nil {
-		return cfg, err
+		fmt.Fprintf(os.Stderr, "alert-service config warning: config service unavailable, using env vars: %v\n", err)
+	}
+
+	if cfg.ServerPort == "" {
+		cfg.ServerPort = "8080"
+	}
+	if len(cfg.CORSAllowedOrigins) == 0 {
+		cfg.CORSAllowedOrigins = splitCSV("http://localhost:3000,http://localhost:5173")
 	}
 
 	if cfg.KafkaConsumerGroup == "" {
 		cfg.KafkaConsumerGroup = "alert-service-group"
 	}
-	if cfg.KafkaConsumptionTopic == "" {
-		cfg.KafkaConsumptionTopic = "energy.consumption.recorded"
-	}
-	if cfg.KafkaAlertCreatedTopic == "" {
-		cfg.KafkaAlertCreatedTopic = "alert.created"
-	}
-	if len(cfg.KafkaBrokers) == 0 {
-		cfg.KafkaBrokers = splitCSV("localhost:9092")
-	}
-	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers)
+	cfg.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(cfg.KafkaConsumptionTopics)
+	cfg.KafkaAlertCreatedTopic = "alerts.events"
+	cfg.KafkaBrokers = normalizeKafkaBrokersForRuntime(cfg.KafkaBrokers, cfg.Environment)
+	cfg.AlertDefaultStatus = normalizeAlertStatus(cfg.AlertDefaultStatus, "open")
 	if cfg.MailHost == "" {
 		cfg.MailHost = "smtp.gmail.com"
 	}
@@ -128,14 +145,40 @@ func (c *Config) loadFromConfigService() error {
 	if c.ServerPort == "" {
 		c.ServerPort = getString(serviceData, "serverPort", "server_port", "port")
 	}
+	if len(c.CORSAllowedOrigins) == 0 {
+		c.CORSAllowedOrigins = getStringSlice(
+			serviceData,
+			"corsAllowedOrigins",
+			"cors_allowed_origins",
+			"allowedOrigins",
+			"allowed_origins",
+		)
+	}
 	if c.KafkaConsumerGroup == "" {
 		c.KafkaConsumerGroup = getString(serviceData, "kafkaConsumerGroup", "kafka_consumer_group", "consumerGroup", "groupId")
 	}
-	if c.KafkaConsumptionTopic == "" {
-		c.KafkaConsumptionTopic = getString(serviceData, "kafkaConsumptionTopic", "kafka_consumption_topic", "consumptionTopic", "topic")
+	if len(c.KafkaConsumptionTopics) == 0 {
+		c.KafkaConsumptionTopics = getStringSlice(serviceData, "kafkaConsumptionTopics", "kafka_consumption_topics", "consumptionTopics", "topics")
 	}
 	if c.KafkaAlertCreatedTopic == "" {
-		c.KafkaAlertCreatedTopic = getString(serviceData, "kafkaAlertCreatedTopic", "kafka_alert_created_topic", "alertCreatedTopic")
+		c.KafkaAlertCreatedTopic = getString(
+			serviceData,
+			"kafkaAlertsTopic",
+			"kafka_alerts_topic",
+			"alertsTopic",
+			"kafkaAlertCreatedTopic",
+			"kafka_alert_created_topic",
+			"alertCreatedTopic",
+		)
+	}
+	if c.AlertDefaultStatus == "" {
+		c.AlertDefaultStatus = getString(
+			serviceData,
+			"alertDefaultStatus",
+			"alert_default_status",
+			"defaultAlertStatus",
+			"default_alert_status",
+		)
 	}
 	if len(c.KafkaBrokers) == 0 {
 		c.KafkaBrokers = firstBrokers(serviceData, kafkaData)
@@ -146,6 +189,9 @@ func (c *Config) loadFromConfigService() error {
 	if c.MailFrom == "" {
 		c.MailFrom = getString(serviceData, "mailFrom", "mail_from")
 	}
+	c.KafkaConsumptionTopics = normalizeKafkaConsumptionTopics(c.KafkaConsumptionTopics)
+	c.KafkaAlertCreatedTopic = "alerts.events"
+	c.AlertDefaultStatus = normalizeAlertStatus(c.AlertDefaultStatus, "open")
 
 	return nil
 }
@@ -206,6 +252,40 @@ func getString(values map[string]any, keys ...string) string {
 	return ""
 }
 
+func getStringSlice(values map[string]any, keys ...string) []string {
+	for _, key := range keys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+
+		switch typed := value.(type) {
+		case string:
+			parts := splitCSV(typed)
+			if len(parts) > 0 {
+				return parts
+			}
+		case []any:
+			out := make([]string, 0, len(typed))
+			for _, entry := range typed {
+				asString, ok := entry.(string)
+				if !ok {
+					continue
+				}
+				trimmed := strings.TrimSpace(asString)
+				if trimmed != "" {
+					out = append(out, trimmed)
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+
+	return nil
+}
+
 func getServicesListEntry(values map[string]any, serviceName string) map[string]any {
 	servicesRaw, ok := values["services"]
 	if !ok {
@@ -258,53 +338,23 @@ func firstBrokers(maps ...map[string]any) []string {
 	return []string{}
 }
 
-func normalizeKafkaBrokersForRuntime(brokers []string) []string {
-	if len(brokers) == 0 || isRunningInContainer() {
-		return brokers
-	}
+func normalizeKafkaBrokersForRuntime(brokers []string, environment string) []string {
+	_ = environment
 
 	normalized := make([]string, 0, len(brokers))
+	seen := make(map[string]struct{}, len(brokers))
 	for _, broker := range brokers {
 		trimmed := strings.TrimSpace(broker)
-		normalized = append(normalized, rewriteKafkaHostToLocalhost(trimmed))
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
 	}
 	return normalized
-}
-
-func rewriteKafkaHostToLocalhost(broker string) string {
-	if broker == "" {
-		return broker
-	}
-
-	// Plain host:port form
-	parts := strings.Split(broker, ":")
-	if len(parts) == 2 && strings.EqualFold(strings.TrimSpace(parts[0]), "kafka") {
-		return "localhost:" + strings.TrimSpace(parts[1])
-	}
-	if len(parts) == 2 && (strings.EqualFold(strings.TrimSpace(parts[0]), "localhost") || strings.EqualFold(strings.TrimSpace(parts[0]), "127.0.0.1")) && strings.TrimSpace(parts[1]) == "29092" {
-		return "localhost:9092"
-	}
-
-	// URL-like form, e.g. PLAINTEXT://kafka:29092
-	if strings.Contains(broker, "://") {
-		parsed, err := url.Parse(broker)
-		if err == nil && strings.EqualFold(parsed.Hostname(), "kafka") {
-			port := parsed.Port()
-			if port != "" {
-				parsed.Host = "localhost:" + port
-			} else {
-				parsed.Host = "localhost"
-			}
-			return parsed.String()
-		}
-	}
-
-	return broker
-}
-
-func isRunningInContainer() bool {
-	_, err := os.Stat(filepath.Clean("/.dockerenv"))
-	return err == nil
 }
 
 func getEnvOrDefault(key string, defaultValue string) string {
@@ -327,6 +377,17 @@ func getFirstEnv(keys []string, defaultValue string) string {
 	return defaultValue
 }
 
+func getCSVEnv(keys []string, defaultValue string) []string {
+	for _, key := range keys {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value != "" {
+			return splitCSV(value)
+		}
+	}
+
+	return splitCSV(defaultValue)
+}
+
 func splitEnv(key string, defaultValue string) []string {
 	value := os.Getenv(key)
 	if value == "" {
@@ -334,6 +395,14 @@ func splitEnv(key string, defaultValue string) []string {
 	}
 
 	return splitCSV(value)
+}
+
+func getTopicsFromEnv() []string {
+	topics := splitEnv("KAFKA_CONSUMPTION_TOPICS", "")
+	if len(topics) == 0 {
+		return requiredKafkaConsumptionTopics()
+	}
+	return topics
 }
 
 func splitCSV(value string) []string {
@@ -349,6 +418,55 @@ func splitCSV(value string) []string {
 	return result
 }
 
+func requiredKafkaConsumptionTopics() []string {
+	return []string{
+		"energy.events",
+		"analytics.events",
+	}
+}
+
+func normalizeKafkaConsumptionTopics(topics []string) []string {
+	return mergeTopics(filterAllowedKafkaTopics(topics), requiredKafkaConsumptionTopics())
+}
+
+func filterAllowedKafkaTopics(topics []string) []string {
+	allowed := make([]string, 0, len(topics))
+	seen := make(map[string]struct{}, len(topics))
+
+	for _, topic := range topics {
+		normalized := strings.ToLower(strings.TrimSpace(topic))
+		if normalized != "energy.events" && normalized != "analytics.events" {
+			continue
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		allowed = append(allowed, normalized)
+	}
+
+	return allowed
+}
+
+func mergeTopics(base []string, extras []string) []string {
+	seen := make(map[string]struct{}, len(base)+len(extras))
+	merged := make([]string, 0, len(base)+len(extras))
+
+	for _, topic := range append(base, extras...) {
+		trimmed := strings.TrimSpace(topic)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		merged = append(merged, trimmed)
+	}
+
+	return merged
+}
+
 func getBoolEnvOrDefault(key string, defaultValue bool) bool {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
@@ -361,4 +479,29 @@ func getBoolEnvOrDefault(key string, defaultValue bool) bool {
 	}
 
 	return parsed
+}
+
+func normalizeAlertStatus(value string, fallback string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "open", "pending", "active":
+		return "open"
+	case "closed":
+		return "resolved"
+	case "resolved", "dismissed", "acknowledged":
+		return strings.ToLower(strings.TrimSpace(value))
+	case "":
+		return strings.ToLower(strings.TrimSpace(fallback))
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+}
+
+func normalizeKafkaUsername(value string) string {
+	trimmed := strings.TrimSpace(value)
+	switch strings.ToLower(trimmed) {
+	case "connectionstring", "onnectionstring":
+		return "$ConnectionString"
+	default:
+		return trimmed
+	}
 }

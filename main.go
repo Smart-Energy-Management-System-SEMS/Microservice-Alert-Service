@@ -32,7 +32,10 @@ func main() {
 		logger.Fatalf("config error: %v", err)
 	}
 	logger.Printf("kafka brokers resolved: %v", cfg.KafkaBrokers)
-	logger.Printf("kafka consumption topic: %s | group: %s", cfg.KafkaConsumptionTopic, cfg.KafkaConsumerGroup)
+	logger.Printf("kafka enabled: %t", cfg.KafkaEnabled)
+	logger.Printf("kafka consumption topics: %v | group: %s", cfg.KafkaConsumptionTopics, cfg.KafkaConsumerGroup)
+	logger.Printf("kafka alert publish topic: %s", cfg.KafkaAlertCreatedTopic)
+	logger.Printf("alert default status normalized: %s", cfg.AlertDefaultStatus)
 
 	db, err := gormconfig.NewDatabase(cfg.DatabaseURL)
 	if err != nil {
@@ -79,7 +82,8 @@ func main() {
 		logger,
 	)
 
-	alertCommandService := commandservices.NewAlertCommandService(alertRepo, notificationService, logger)
+	kafkaProducer := kafka.NewAlertEventProducer(cfg, logger)
+	alertCommandService := commandservices.NewAlertCommandService(alertRepo, kafkaProducer, notificationService, cfg.AlertDefaultStatus, logger)
 	thresholdCommandService := commandservices.NewThresholdCommandService(thresholdRepo, logger)
 	inactivityCommandService := commandservices.NewInactivityRuleCommandService(inactivityRepo, logger)
 	preferenceCommandService := commandservices.NewNotificationPreferenceCommandService(preferenceRepo, logger)
@@ -89,17 +93,18 @@ func main() {
 	inactivityQueryService := queryservices.NewInactivityRuleQueryService(inactivityRepo)
 	preferenceQueryService := queryservices.NewNotificationPreferenceQueryService(preferenceRepo)
 
-	eventHandler := eventhandlers.NewConsumptionEventHandler(
+	eventHandler := eventhandlers.NewIntegrationEventHandler(
 		thresholdRepo,
 		inactivityRepo,
 		deviceActivityRepo,
 		alertCommandService,
 		logger,
 	)
-	kafkaProducer := kafka.NewAlertEventProducer(cfg, logger)
 	kafkaController := controllers.NewKafkaController(kafkaProducer)
+	diagnosticsController := controllers.NewDiagnosticsController(cfg, db, kafkaProducer)
 
 	router := rest.NewRouter(
+		cfg,
 		alertCommandService,
 		alertQueryService,
 		thresholdCommandService,
@@ -109,6 +114,7 @@ func main() {
 		preferenceCommandService,
 		preferenceQueryService,
 		kafkaController,
+		diagnosticsController,
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -116,9 +122,9 @@ func main() {
 
 	consumer := kafka.NewConsumptionConsumer(cfg, eventHandler, logger)
 	if consumer.Enabled() {
-		go consumer.Start(ctx)
+		go consumer.Start(ctx, eventHandler)
 	} else {
-		logger.Println("kafka consumer disabled: missing brokers or topic")
+		logger.Println("kafka consumer disabled: missing brokers or topics")
 	}
 
 	server := &http.Server{

@@ -8,12 +8,16 @@ services:
       - .env
     environment:
       SERVICE_NAME: ${SERVICE_NAME:-alert-service}
-      SERVER_PORT: ${SERVER_PORT:-8085}
+      PORT: ${PORT:-8080}
+      SERVER_PORT: ${PORT:-8080}
       CONFIG_SERVICE_URL: ${CONFIG_SERVICE_URL:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-alert_service}?sslmode=disable
-      KAFKA_BROKERS: kafka:9092
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      KAFKA_BROKERS: ${KAFKA_BROKERS_CONTAINER:-kafka:9092}
+      KAFKA_CONSUMPTION_TOPICS: ${KAFKA_CONSUMPTION_TOPICS:-energy.events,analytics.events}
+      KAFKA_ALERTS_TOPIC: ${KAFKA_ALERTS_TOPIC:-alerts.events}
     ports:
-      - "${SERVER_PORT:-8085}:${SERVER_PORT:-8085}"
+      - "${PORT:-8080}:${PORT:-8080}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,12 +58,28 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
     restart: unless-stopped
+
+  kafka-topics-init:
+    image: apache/kafka:latest
+    container_name: sems-kafka-topics-init
+    env_file:
+      - .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVER: kafka:9092
+      KAFKA_TOPICS: ${KAFKA_TOPICS:-energy.events,analytics.events,alerts.events}
+    volumes:
+      - ./scripts/create-topics.sh:/scripts/create-topics.sh:ro
+    depends_on:
+      kafka:
+        condition: service_started
+    command: ["/bin/sh", "/scripts/create-topics.sh"]
+    restart: "no"
 
 volumes:
   postgres_data:
